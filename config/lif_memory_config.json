@@ -1,0 +1,50 @@
+{
+  "version": "0.3.0",
+  "states": {
+    "Experiment": {
+      "theta": 7.5,
+      "decay": 0.82,
+      "reset_ratio": 0.35,
+      "cooldown_days": 1,
+      "evidence_cap": 6.5,
+      "keywords": ["负阻", "测试", "波形", "KS1092", "LIF", "SSVEP", "EEG", "事件率", "RMS", "后向散射", "USRP", "实验", "数据", "ADC", "前端", "阈值", "压缩比", "恢复"],
+      "suggestion": "接下来 30 分钟只做一个可记录实验动作：测一组关键波形或阈值数据，并把截图/数值写回实验笔记。"
+    },
+    "Thesis": {
+      "theta": 7.0,
+      "decay": 0.84,
+      "reset_ratio": 0.38,
+      "cooldown_days": 1,
+      "evidence_cap": 6.2,
+      "keywords": ["论文", "第三章", "第四章", "盲审", "答辩", "提交", "证据", "图", "章节", "导师", "逻辑", "写进论文", "创新点", "摘要"],
+      "suggestion": "打开论文主文档，只处理一个证据块：把现有数据变成一句结论、一张图说明或一个可答辩的限制条件。"
+    },
+    "Career": {
+      "theta": 6.5,
+      "decay": 0.80,
+      "reset_ratio": 0.35,
+      "cooldown_days": 1,
+      "evidence_cap": 5.8,
+      "keywords": ["简历", "实习", "工作", "求职", "面试", "大模型", "国企", "央企", "应届", "岗位", "投递", "机会", "华为", "GitHub"],
+      "suggestion": "只推进求职链路里的一个小动作：改一个简历项目条目，或投递/收藏一个和 AI+硬件相关的岗位。"
+    },
+    "AI_Memory": {
+      "theta": 7.2,
+      "decay": 0.83,
+      "reset_ratio": 0.36,
+      "cooldown_days": 1,
+      "evidence_cap": 6.0,
+      "keywords": ["AI", "大模型", "agent", "智能体", "记忆", "主动", "RAG", "Obsidian", "skill", "LIF-Memory", "snn", "SNN", "脉冲", "Codex"],
+      "suggestion": "把 AI 记忆想法压成一个最小可验证实验：补一条规则、跑一次回放、记录一次触发是否合理。"
+    },
+    "Health": {
+      "theta": 5.8,
+      "decay": 0.78,
+      "reset_ratio": 0.40,
+      "cooldown_days": 1,
+      "evidence_cap": 5.2,
+      "keywords": ["焦虑", "累", "崩", "睡", "身体", "情绪", "宿舍", "运动", "恢复", "压力", "疲惫", "害怕", "撕扯", "难受", "色情", "吃"],
+      "suggestion": "先做一个恢复动作：离开屏幕 10 分钟，喝水或走动，然后只回到一个最小任务，不重新规划整个人生。"
+    }
+  }
+}
