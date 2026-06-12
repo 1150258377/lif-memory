@@ -8,8 +8,10 @@ venv/
 
 # Generated replay reports may contain private note snippets.
 LIF-Memory 回放结果.md
+LIF-Insight 回放结果.md
 *回放结果*.md
 lif_spikes.json
+lif_insights.json
 lif_state.json
 *.local.json
 
