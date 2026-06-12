@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated replay reports may contain private note snippets.
+LIF-Memory 回放结果.md
+*回放结果*.md
+
+# Local Obsidian/cache files if the project is copied into a vault.
+.obsidian/
+.trash/
