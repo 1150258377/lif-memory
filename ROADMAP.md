@@ -1,5 +1,29 @@
 # LIF-Memory Roadmap
 
+## v0.4 status
+
+The project now includes `insight_integrator.py`.
+
+This changes the center of the project:
+
+```text
+from: keyword-triggered action reminder
+  to: LIF-style weak evidence integration
+```
+
+The important behavior is that one strong keyword is not enough. The system waits for multiple weak fragments around the same latent question, integrates them with leak, and emits an insight spike only after the integrated state crosses a threshold.
+
+Implemented in v0.4:
+
+- `insight_integrator.py`
+- `docs/INSIGHT_INTEGRATOR.md`
+- `tests/test_insight_integrator.py`
+- Default latent questions:
+  - `Innovation_Claim`
+  - `Experimental_Closure`
+  - `Thesis_Closure`
+  - `Action_Bottleneck`
+
 ## v0.3 status
 
 The project has moved from a single replay script toward a small, testable memory system:
@@ -7,7 +31,7 @@ The project has moved from a single replay script toward a small, testable memor
 - Configurable state neurons through JSON config.
 - Optional persistent `state-file` for incremental runs.
 - Evidence packets with source path, snippet, score, matched keywords, and modifiers.
-- Unit tests for note discovery, spike triggering, completion inhibition, incremental filtering, and config round trip.
+- Unit tests for state round trip, config loading, incremental filtering, and stateful replay.
 
 ## Next engineering steps
 
@@ -21,6 +45,7 @@ lif_memory/
   neuron.py
   replay.py
   render.py
+  insight.py
 ```
 
 2. Add a manual evaluation dataset:
@@ -40,9 +65,15 @@ manual label -> adjust theta / evidence_cap / keyword weight
 4. Add a safer action policy:
 
 ```text
-Health spike suppresses non-urgent work spikes
+Health or Action_Bottleneck spike suppresses non-urgent work spikes
 Experiment + Thesis conflict resolves to one concrete action
 Daily budget defaults to one spike when stress is high
+```
+
+5. Upgrade insight generation:
+
+```text
+static insight template -> evidence-conditioned generated insight -> user-rated calibration
 ```
 
 ## Research framing
@@ -53,8 +84,8 @@ The stronger claim is:
 
 ```text
 High-dimensional notes remain lossless in Obsidian.
-Low-dimensional LIF states track unresolved pressure over time.
-Sparse spikes trigger evidence recall and action selection.
+Low-dimensional LIF states track unresolved pressure and latent questions over time.
+Sparse spikes trigger evidence recall, insight synthesis, and next validation action.
 ```
 
 This makes the project a practical analogue of event-driven memory rather than a toy keyword reminder.
