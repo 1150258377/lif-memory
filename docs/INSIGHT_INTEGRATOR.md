@@ -12,6 +12,24 @@ The insight integrator fires only when multiple weak fragments accumulate around
 weak fragments -> leaky integration -> threshold crossing -> insight spike
 ```
 
+## What is insight voltage?
+
+In `insight_integrator.py`, `V` is not raw note volume.
+
+`V` means:
+
+```text
+accumulated pressure around one latent question
+```
+
+It rises when multiple fragments point to the same hidden question, especially when they contain tension, blockers, evidence, or repeated attempts to define something. It leaks with time and can be inhibited by fragments that look like closure or completion.
+
+So the voltage does not preserve the full note. It only asks:
+
+```text
+Has enough distributed evidence accumulated that this latent question should become an explicit insight?
+```
+
 ## Why this matters
 
 The useful role of LIF is not just triggering.
