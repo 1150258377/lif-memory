@@ -6,11 +6,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable
 
 import lif_memory as core
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 
 @dataclass(frozen=True)
@@ -111,8 +111,6 @@ ROLE_KEYWORDS: dict[str, list[str]] = {
         "类比",
         "迁移",
         "联系",
-        "从",
-        "到",
         "可以理解为",
         "本质上",
         "机制",
