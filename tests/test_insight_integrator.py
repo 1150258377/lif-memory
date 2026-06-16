@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -102,6 +103,65 @@ class InsightIntegratorTests(unittest.TestCase):
         self.assertEqual(packet["spike_type"], "Insight")
         self.assertEqual(packet["latent_question"], "Innovation_Claim")
         self.assertEqual(len(packet["integrated_fragments"]), 1)
+        self.assertEqual(packet["insight_type"], "emergent_claim")
+        self.assertEqual(packet["thinking_policy"], "write_claim")
+
+    def test_economics_profile_can_be_selected(self) -> None:
+        profile = insight.select_profile("economics")
+        questions = insight.select_questions(None, profile)
+
+        self.assertEqual(profile.title, "经济学思想洞察")
+        self.assertIn("Debt_Finance", questions)
+        self.assertIn("Inflation_Rate", questions)
+
+    def test_economics_fragments_integrate_into_debt_insight(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            (vault / ".obsidian").mkdir()
+            note1 = vault / "2026-06-10.md"
+            note2 = vault / "2026-06-11.md"
+            note3 = vault / "2026-06-12.md"
+            note1.write_text("地产债务和银行资产负债表压力开始影响融资。", encoding="utf-8")
+            note2.write_text("高杠杆下现金流断裂会让信用继续收缩。", encoding="utf-8")
+            note3.write_text("我不理解为什么资产价格下跌会放大违约风险。", encoding="utf-8")
+            notes = [
+                (date(2026, 6, 10), note1),
+                (date(2026, 6, 11), note2),
+                (date(2026, 6, 12), note3),
+            ]
+            question = replace(insight.ECONOMICS_QUESTIONS["Debt_Finance"], theta=4.0)
+            spikes, _, _ = insight.replay_insights(
+                notes,
+                {"Debt_Finance": question},
+                daily_insight_budget=2,
+                min_fragments=3,
+            )
+
+        self.assertEqual(len(spikes), 1)
+        self.assertEqual(spikes[0].question, "Debt_Finance")
+        self.assertEqual(spikes[0].insight_type, "balance_sheet_pressure")
+        self.assertEqual(spikes[0].thinking_policy, "collect_evidence")
+        self.assertIn("资产负债表", spikes[0].emergent_insight)
+
+    def test_select_questions_uses_profile_scope(self) -> None:
+        profile = insight.select_profile("economics")
+        selected = insight.select_questions("Debt_Finance,Market_Psychology", profile)
+
+        self.assertEqual(list(selected), ["Debt_Finance", "Market_Psychology"])
+
+    def test_exploratory_sensitivity_lowers_threshold(self) -> None:
+        profile = insight.select_profile("economics")
+        normal = insight.select_questions("Market_Psychology", profile)
+        exploratory = insight.apply_sensitivity(normal, "exploratory")
+
+        self.assertLess(exploratory["Market_Psychology"].theta, normal["Market_Psychology"].theta)
+        self.assertGreater(exploratory["Market_Psychology"].evidence_cap, normal["Market_Psychology"].evidence_cap)
+
+    def test_ascii_acronym_matching_uses_word_boundaries(self) -> None:
+        hits = insight.matched_words("happiness suppose application", ["PPI", "CPI"])
+
+        self.assertEqual(hits, [])
+        self.assertEqual(insight.matched_words("CPI and PPI are both macro indicators", ["PPI", "CPI"]), ["PPI", "CPI"])
 
 
 if __name__ == "__main__":

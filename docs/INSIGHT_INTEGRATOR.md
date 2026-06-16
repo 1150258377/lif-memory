@@ -72,10 +72,40 @@ The claim is that EEG can be eventized first, then carried by backscatter while 
 python insight_integrator.py --days 14 --dry-run
 ```
 
+Run the economics insight profile:
+
+```powershell
+python insight_integrator.py --vault "." --profile economics --days 90 --output "经济学 LIF 洞察.md" --json-output "economics_insights.json"
+```
+
+If the domain is sparse because you have not paid much attention to it, use exploratory sensitivity:
+
+```powershell
+python insight_integrator.py --vault "." --profile economics --sensitivity exploratory --days 90 --output "经济学 LIF 洞察.md" --json-output "economics_insights.json"
+```
+
+The economics profile tracks:
+
+```text
+Macro_Cycle          economic cycle, recession, recovery, demand/supply phase shifts
+Inflation_Rate       inflation, rates, central bank policy, liquidity, bond yields
+Incentive_System     incentives, institutions, property rights, regulation, agency problems
+Debt_Finance         debt, leverage, credit, balance sheets, refinancing pressure
+Market_Psychology    expectations, confidence, bubbles, narratives, risk appetite
+```
+
+In this profile, `V` means accumulated explanatory tension around an economic idea. A spike does not mean “take action now”; it means the fragments have accumulated enough pressure to write an explicit thought card.
+
 Run one latent question:
 
 ```powershell
 python insight_integrator.py --questions Innovation_Claim --days 14 --dry-run
+```
+
+Run one economics question:
+
+```powershell
+python insight_integrator.py --profile economics --questions Debt_Finance --days 90 --dry-run
 ```
 
 Write JSON packets:

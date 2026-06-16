@@ -32,6 +32,31 @@ Related experimental track:
 - `tests/test_insight_integrator.py`
 - Latent questions such as `Innovation_Claim`, `Experimental_Closure`, `Thesis_Closure`, and `Action_Bottleneck`.
 
+## Insight integrator v0.5 status
+
+The insight integrator now supports domain-specific profiles.
+
+Implemented:
+
+- `--profile lif_thesis` for the original LIF/thesis thought integration.
+- `--profile economics` for economics thought integration.
+- Economics latent questions:
+  - `Macro_Cycle`
+  - `Inflation_Rate`
+  - `Incentive_System`
+  - `Debt_Finance`
+  - `Market_Psychology`
+- Spike packets now include:
+  - `insight_type`
+  - `thinking_policy`
+
+This lets the same architecture run in two modes:
+
+```text
+action LIF   -> unresolved action pressure -> action card
+thought LIF  -> unresolved explanatory tension -> insight card
+```
+
 ## v0.5 status
 
 The stateful runner now persists topic history.

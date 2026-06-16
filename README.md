@@ -357,6 +357,45 @@ top evidence notes for each LIF state
 how graph evidence should feed future LIF voltage
 ```
 
+## Domain Insight Profiles
+
+`insight_integrator.py` can also run domain-specific thought profiles. This uses the same LIF idea, but changes the meaning of voltage:
+
+```text
+action profile: V = unresolved action pressure
+insight profile: V = unresolved explanatory tension
+```
+
+Run the economics profile:
+
+```powershell
+python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --days 90 --output "经济学 LIF 洞察.md" --json-output "economics_insights.json"
+```
+
+For sparse domains you have not focused on, use exploratory sensitivity:
+
+```powershell
+python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --sensitivity exploratory --days 90 --output "经济学 LIF 洞察.md" --json-output "economics_insights.json"
+```
+
+Economics latent questions:
+
+```text
+Macro_Cycle
+Inflation_Rate
+Incentive_System
+Debt_Finance
+Market_Psychology
+```
+
+Run only one economic question:
+
+```powershell
+python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --questions Debt_Finance --days 90 --dry-run
+```
+
+The output is not a task reminder. It is a thought card trigger: fragments accumulate until they justify writing a claim, contrast, mechanism table, or evidence card.
+
 ## States
 
 The default version tracks five state neurons:

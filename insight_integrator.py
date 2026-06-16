@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, Mapping
 
 import lif_memory as core
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,16 @@ class LatentQuestion:
     completion_words: list[str]
     emergent_insight: str
     next_validation_action: str
+    insight_type: str = "emergent_claim"
+    thinking_policy: str = "write_claim"
+
+
+@dataclass(frozen=True)
+class InsightProfile:
+    name: str
+    title: str
+    description: str
+    questions: dict[str, LatentQuestion]
 
 
 @dataclass
@@ -69,6 +80,8 @@ class InsightSpike:
     fragments: list[Fragment]
     emergent_insight: str
     next_validation_action: str
+    insight_type: str = "emergent_claim"
+    thinking_policy: str = "write_claim"
 
 
 DEFAULT_QUESTIONS: dict[str, LatentQuestion] = {
@@ -210,11 +223,208 @@ DEFAULT_QUESTIONS: dict[str, LatentQuestion] = {
 }
 
 
+ECONOMICS_QUESTIONS: dict[str, LatentQuestion] = {
+    "Macro_Cycle": LatentQuestion(
+        theta=7.2,
+        decay=0.88,
+        reset_ratio=0.35,
+        cooldown_days=2,
+        evidence_cap=6.2,
+        keywords=[
+            "经济周期",
+            "周期",
+            "衰退",
+            "复苏",
+            "增长",
+            "GDP",
+            "就业",
+            "失业",
+            "需求",
+            "供给",
+            "库存",
+            "产能",
+            "危机",
+            "萧条",
+            "扩张",
+        ],
+        conflict_words=["为什么", "矛盾", "不理解", "失衡", "滞胀", "危机", "泡沫", "下行"],
+        completion_words=["解释清楚", "结论", "模型", "框架", "明白", "定义"],
+        insight_type="repeated_pattern",
+        thinking_policy="write_claim",
+        emergent_insight=(
+            "经济周期不应只看单个指标涨跌，而应看需求、产能、库存、就业和信用条件之间的相位差。"
+            "当这些变量反复不同步时，真正值得记录的是周期机制，而不是当天的宏观新闻。"
+        ),
+        next_validation_action=(
+            "写一张周期洞察卡：一个周期命题、两个支持变量、一个反例，以及下一次需要观察的领先指标。"
+        ),
+    ),
+    "Inflation_Rate": LatentQuestion(
+        theta=7.0,
+        decay=0.87,
+        reset_ratio=0.34,
+        cooldown_days=2,
+        evidence_cap=6.0,
+        keywords=[
+            "通胀",
+            "CPI",
+            "PPI",
+            "利率",
+            "降息",
+            "加息",
+            "央行",
+            "货币政策",
+            "流动性",
+            "债券",
+            "收益率",
+            "实际利率",
+            "汇率",
+        ],
+        conflict_words=["为什么", "矛盾", "不理解", "滞胀", "压力", "失控", "传导", "倒挂"],
+        completion_words=["结论", "解释", "框架", "明白", "可以理解为"],
+        insight_type="model_tension",
+        thinking_policy="compare_models",
+        emergent_insight=(
+            "通胀和利率的关键张力不是“涨价所以加息”这么简单，而是名义利率、实际利率、"
+            "预期和信用扩张之间的传导是否一致。若传导断裂，政策利率可能和实体感受相反。"
+        ),
+        next_validation_action=(
+            "写一个两模型对比：货币数量/流动性解释 vs 供给冲击/预期解释，并列出各自能解释和不能解释的现象。"
+        ),
+    ),
+    "Incentive_System": LatentQuestion(
+        theta=7.0,
+        decay=0.89,
+        reset_ratio=0.36,
+        cooldown_days=2,
+        evidence_cap=6.0,
+        keywords=[
+            "激励",
+            "制度",
+            "产权",
+            "博弈",
+            "监管",
+            "租金",
+            "寻租",
+            "道德风险",
+            "逆向选择",
+            "委托代理",
+            "市场失灵",
+            "公共品",
+        ],
+        conflict_words=["扭曲", "失灵", "套利", "不公平", "为什么", "悖论", "冲突", "约束"],
+        completion_words=["机制", "解释清楚", "结论", "定义", "框架"],
+        insight_type="mechanism_link",
+        thinking_policy="write_mechanism",
+        emergent_insight=(
+            "制度和市场现象的洞察点往往不在道德判断，而在激励约束："
+            "谁承担成本、谁获得收益、谁能转嫁风险，决定了行为是否会系统性偏离目标。"
+        ),
+        next_validation_action=(
+            "画一个三列机制表：参与者、激励/约束、可预期行为，并写出这个制度安排的一个副作用。"
+        ),
+    ),
+    "Debt_Finance": LatentQuestion(
+        theta=7.2,
+        decay=0.90,
+        reset_ratio=0.35,
+        cooldown_days=2,
+        evidence_cap=6.3,
+        keywords=[
+            "债务",
+            "杠杆",
+            "信用",
+            "融资",
+            "资产负债表",
+            "违约",
+            "债券",
+            "现金流",
+            "负债",
+            "房价",
+            "地产",
+            "银行",
+            "风险偏好",
+        ],
+        conflict_words=["爆雷", "违约", "压力", "断裂", "风险", "危机", "还不起", "收缩", "去杠杆"],
+        completion_words=["结论", "解释", "框架", "明白", "模型"],
+        insight_type="balance_sheet_pressure",
+        thinking_policy="collect_evidence",
+        emergent_insight=(
+            "债务问题的核心不是债务规模本身，而是现金流、资产价格和再融资条件的耦合。"
+            "当资产价格下跌同时融资变难，资产负债表压力会把局部问题放大成系统性收缩。"
+        ),
+        next_validation_action=(
+            "写一张资产负债表洞察卡：资产端变化、负债端约束、现金流压力、可能的反馈循环。"
+        ),
+    ),
+    "Market_Psychology": LatentQuestion(
+        theta=6.8,
+        decay=0.84,
+        reset_ratio=0.40,
+        cooldown_days=1,
+        evidence_cap=5.8,
+        keywords=[
+            "预期",
+            "信心",
+            "恐慌",
+            "泡沫",
+            "叙事",
+            "情绪",
+            "羊群",
+            "共识",
+            "风险偏好",
+            "市场心理",
+            "乐观",
+            "悲观",
+        ],
+        conflict_words=["反转", "崩", "恐慌", "过热", "踩踏", "分歧", "错杀", "高估", "低估"],
+        completion_words=["结论", "解释", "明白", "复盘"],
+        insight_type="narrative_shift",
+        thinking_policy="write_contrast",
+        emergent_insight=(
+            "市场心理的洞察不是记录情绪强弱，而是识别叙事切换："
+            "同一组事实在不同预期框架下会被解释成完全相反的价格信号。"
+        ),
+        next_validation_action=(
+            "写一个叙事对照：当前主流解释、反向解释、触发叙事切换的证据阈值。"
+        ),
+    ),
+}
+
+
+INSIGHT_PROFILES: dict[str, InsightProfile] = {
+    "lif_thesis": InsightProfile(
+        name="lif_thesis",
+        title="LIF/论文洞察",
+        description="围绕 LIF、后向散射、论文闭环和行动瓶颈的思想整合 profile。",
+        questions=DEFAULT_QUESTIONS,
+    ),
+    "economics": InsightProfile(
+        name="economics",
+        title="经济学思想洞察",
+        description="把经济学笔记中的周期、利率、制度、债务和市场心理片段整合成 insight spike。",
+        questions=ECONOMICS_QUESTIONS,
+    ),
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Integrate weak note fragments into LIF-style insight spikes.")
     parser.add_argument("--vault", type=Path, default=None, help="Obsidian vault path.")
     parser.add_argument("--days", type=int, default=14, help="Number of latest daily notes to integrate.")
     parser.add_argument("--today", type=str, default=None, help="Optional YYYY-MM-DD cutoff date.")
+    parser.add_argument(
+        "--profile",
+        choices=sorted(INSIGHT_PROFILES),
+        default="lif_thesis",
+        help="Domain insight profile to run.",
+    )
+    parser.add_argument(
+        "--sensitivity",
+        choices=["conservative", "normal", "exploratory"],
+        default="normal",
+        help="Adjust insight thresholds. Use exploratory for domains with sparse notes.",
+    )
     parser.add_argument("--questions", type=str, default=None, help="Comma-separated latent questions to run.")
     parser.add_argument("--min-fragments", type=int, default=3, help="Minimum non-completion fragments required for an insight spike.")
     parser.add_argument("--daily-insight-budget", type=int, default=2, help="Maximum insight spikes emitted per day.")
@@ -238,7 +448,12 @@ def matched_words(text: str, words: Iterable[str]) -> list[str]:
     lower = text.lower()
     hits: list[str] = []
     for word in words:
-        if word.lower() in lower and word not in hits:
+        needle = word.lower()
+        if re.fullmatch(r"[a-z0-9_+-]+", needle):
+            matched = re.search(rf"(?<![a-z0-9_]){re.escape(needle)}(?![a-z0-9_])", lower) is not None
+        else:
+            matched = needle in lower
+        if matched and word not in hits:
             hits.append(word)
     return hits
 
@@ -389,6 +604,8 @@ def replay_insights(
                     fragments=fragments,
                     emergent_insight=question.emergent_insight,
                     next_validation_action=question.next_validation_action,
+                    insight_type=question.insight_type,
+                    thinking_policy=question.thinking_policy,
                 )
             )
             state.last_spike_date = day
@@ -411,6 +628,8 @@ def insight_packet(spike: InsightSpike, vault: Path) -> dict[str, object]:
         "time": spike.day.isoformat(),
         "V": round(spike.voltage, 2),
         "threshold": round(spike.threshold, 2),
+        "insight_type": spike.insight_type,
+        "thinking_policy": spike.thinking_policy,
         "integrated_fragments": [fragment.packet(vault) for fragment in spike.fragments],
         "emergent_insight": spike.emergent_insight,
         "next_validation_action": spike.next_validation_action,
@@ -424,12 +643,17 @@ def render_markdown(
     timeline: list[dict[str, object]],
     states: Mapping[str, InsightState],
     questions: Mapping[str, LatentQuestion],
+    profile: InsightProfile,
+    sensitivity: str = "normal",
 ) -> str:
     lines: list[str] = []
-    lines.append("# LIF Insight Integrator 回放结果")
+    lines.append(f"# LIF Insight Integrator 回放结果：{profile.title}")
     lines.append("")
     lines.append(f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"版本：{VERSION}")
+    lines.append(f"Profile：{profile.name}")
+    lines.append(f"Sensitivity：{sensitivity}")
+    lines.append(f"说明：{profile.description}")
     lines.append(f"回放日志数：{len(notes)}")
     if notes:
         lines.append(f"回放范围：{notes[0][0].isoformat()} 到 {notes[-1][0].isoformat()}")
@@ -463,6 +687,8 @@ def render_markdown(
         lines.append("")
         lines.append(f"- 电位：{spike.voltage:.2f}")
         lines.append(f"- 阈值：{spike.threshold:.2f}")
+        lines.append(f"- Insight type：{spike.insight_type}")
+        lines.append(f"- Thinking policy：{spike.thinking_policy}")
         lines.append("- 被整合的碎片：")
         for fragment in spike.fragments:
             lines.append(
@@ -505,14 +731,47 @@ def render_markdown(
     return "\n".join(lines)
 
 
-def select_questions(value: str | None) -> dict[str, LatentQuestion]:
+def select_profile(value: str) -> InsightProfile:
+    try:
+        return INSIGHT_PROFILES[value]
+    except KeyError as exc:
+        raise SystemExit(f"Unknown profile: {value}. Available: {', '.join(sorted(INSIGHT_PROFILES))}") from exc
+
+
+def select_questions(value: str | None, profile: InsightProfile) -> dict[str, LatentQuestion]:
     if value is None or not value.strip():
-        return dict(DEFAULT_QUESTIONS)
+        return dict(profile.questions)
     requested = [item.strip() for item in value.split(",") if item.strip()]
-    unknown = [name for name in requested if name not in DEFAULT_QUESTIONS]
+    unknown = [name for name in requested if name not in profile.questions]
     if unknown:
-        raise SystemExit(f"Unknown questions: {', '.join(unknown)}. Available: {', '.join(DEFAULT_QUESTIONS)}")
-    return {name: DEFAULT_QUESTIONS[name] for name in requested}
+        raise SystemExit(f"Unknown questions: {', '.join(unknown)}. Available: {', '.join(profile.questions)}")
+    return {name: profile.questions[name] for name in requested}
+
+
+def apply_sensitivity(
+    questions: dict[str, LatentQuestion],
+    sensitivity: str,
+) -> dict[str, LatentQuestion]:
+    if sensitivity == "normal":
+        return questions
+
+    if sensitivity == "exploratory":
+        theta_ratio = 0.72
+        cap_ratio = 1.15
+    elif sensitivity == "conservative":
+        theta_ratio = 1.20
+        cap_ratio = 0.90
+    else:
+        raise SystemExit(f"Unknown sensitivity: {sensitivity}")
+
+    return {
+        name: replace(
+            question,
+            theta=question.theta * theta_ratio,
+            evidence_cap=question.evidence_cap * cap_ratio,
+        )
+        for name, question in questions.items()
+    }
 
 
 def resolve_output(vault: Path, path: Path | None) -> Path | None:
@@ -531,7 +790,8 @@ def main() -> None:
     args = parse_args()
     vault = (args.vault or core.vault_root_from_script()).resolve()
     cutoff = parse_cutoff(args.today)
-    questions = select_questions(args.questions)
+    profile = select_profile(args.profile)
+    questions = apply_sensitivity(select_questions(args.questions, profile), args.sensitivity)
     notes = core.find_daily_notes(vault, cutoff, args.days)
     spikes, timeline, states = replay_insights(
         notes,
@@ -539,7 +799,7 @@ def main() -> None:
         daily_insight_budget=args.daily_insight_budget,
         min_fragments=args.min_fragments,
     )
-    report = render_markdown(vault, notes, spikes, timeline, states, questions)
+    report = render_markdown(vault, notes, spikes, timeline, states, questions, profile, args.sensitivity)
 
     if args.dry_run:
         print(report)
