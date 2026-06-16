@@ -1,12 +1,71 @@
 # LIF-Memory
 
-LIF-Memory is a minimal event-driven memory replay prototype for Obsidian notes.
+LIF-Memory 是一个面向 Obsidian 笔记的事件驱动记忆回放原型。
 
-It does **not** try to reconstruct full language from spikes. Instead, it keeps original notes in Obsidian, maps high-dimensional text into low-dimensional LIF-style state variables, and emits evidence-linked spike event packets when a state crosses its threshold.
+它的目标不是把笔记压缩成另一套摘要，也不是用 spike 重建完整语言；原始信息仍然保存在 Obsidian 中。LIF-Memory 做的是把日记、项目笔记和思考片段映射到低维的 LIF 状态变量中，当某个主题的“行动压力”或“解释张力”持续累积并超过阈值时，系统会生成带证据来源的 spike 事件包，提醒你回到真正需要处理的问题。
 
 ```text
-Original notes -> Evidence extraction -> LIF states -> Threshold crossing -> Evidence-linked spike -> Suggested action
+原始笔记 -> 证据抽取 -> LIF 状态 -> 阈值触发 -> 证据链 spike -> 下一步行动/洞察卡
 ```
+
+## 项目能做什么
+
+- 从 Obsidian 日记和项目笔记中抽取和主题相关的证据片段。
+- 用 LIF 电位模拟某个主题的持续压力、遗留问题和完成信号。
+- 在阈值触发时生成可追溯的 spike 事件包，而不是只给出空泛提醒。
+- 支持行动型回放，例如实验、论文、职业、AI 记忆、健康等状态。
+- 支持思想型 profile，例如经济学洞察，把零散观点积累成可写作的洞察卡。
+- 支持反馈闭环，把“有用、太早、已完成、不要再提醒”等人工反馈写回状态。
+
+## 适合的使用场景
+
+这个项目适合用来管理长期、反复出现、容易在笔记里分散的问题，例如：
+
+```text
+论文闭环
+实验数据整理
+LIF / 后向散射研究链路
+AI 记忆系统构建
+经济学主题洞察
+健康和精力恢复
+```
+
+它不会替你决定最终答案，而是帮你找出：哪些问题已经积累了足够证据，应该被重新打开、隔离处理、降级，或者关闭。
+
+## 快速开始
+
+在 Obsidian 仓库根目录运行：
+
+```powershell
+python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --output "LIF-Memory 回放结果.md"
+```
+
+只预览结果、不写入文件：
+
+```powershell
+python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --dry-run
+```
+
+运行经济学洞察 profile：
+
+```powershell
+python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --days 90 --output "经济学 LIF 洞察.md"
+```
+
+## 核心思想
+
+LIF-Memory 把笔记系统看作一个记忆网络：
+
+```text
+原始笔记保存完整信息
+证据片段提供输入电流
+主题状态累积电位 V
+完成信号抑制重复触发
+超过阈值后生成 spike
+spike 指向下一步行动或洞察写作
+```
+
+其中 `V` 不是 token 数，也不是 embedding 维度，而是某个主题尚未解决的压力或解释张力。这个设计让系统可以保留原始笔记的细节，同时用一个低维状态追踪“现在什么事情值得被重新看见”。
 
 ## What was optimized in v0.2.0
 
