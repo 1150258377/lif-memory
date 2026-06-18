@@ -1,0 +1,10 @@
+{
+  "id": "lifme",
+  "name": "LIFME",
+  "version": "0.1.0",
+  "minAppVersion": "1.7.2",
+  "description": "Event-driven memory and insight engine for Obsidian vaults.",
+  "author": "pengqiang jing",
+  "authorUrl": "https://github.com/1150258377",
+  "isDesktopOnly": false
+}
