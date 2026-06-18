@@ -1,0 +1,10 @@
+.lifme-muted {
+  color: var(--text-muted);
+}
+
+.lifme-stat {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
