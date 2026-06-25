@@ -15,6 +15,12 @@ lif_spikes.json
 lif_insights.json
 lif_inspiration.json
 lif_state.json
+lif_field_state.json
+lif_field_params.json
+lif_sessions.json
+lif_conclusions.json
+lif_embedding_cache.json
+lif_domain_state.json
 *.local.json
 
 # Local Obsidian/cache files if the project is copied into a vault.
