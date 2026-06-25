@@ -10,6 +10,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
+from lif_field_learning import dense_cosine, embed_query, hydrate_note_embeddings
+
 VERSION = "0.8.0-field"
 
 DATE_RE = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
@@ -51,6 +53,7 @@ class NoteObservation:
     links: list[str]
     vector: dict[str, float]
     graph_vector: dict[str, float] = field(default_factory=dict)
+    dense_vector: list[float] = field(default_factory=list)
     centrality: float = 0.0
 
 
@@ -62,6 +65,8 @@ class FieldHit:
     time_weight: float
     graph_bonus: float
     modifiers: list[str]
+    sparse_semantic: float = 0.0
+    dense_semantic: float = 0.0
 
     def to_packet(self) -> dict[str, object]:
         return {
@@ -70,6 +75,8 @@ class FieldHit:
             "day": self.note.day.isoformat(),
             "score": round(self.score, 4),
             "semantic": round(self.semantic, 4),
+            "sparse_semantic": round(self.sparse_semantic, 4),
+            "dense_semantic": round(self.dense_semantic, 4),
             "time_weight": round(self.time_weight, 4),
             "graph_bonus": round(self.graph_bonus, 4),
             "modifiers": self.modifiers,
@@ -143,6 +150,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--graph-alpha", type=float, default=0.35, help="Graph diffusion neighbor mixing ratio.")
     parser.add_argument("--threshold", type=float, default=5.0, help="LIF threshold for insight spike.")
     parser.add_argument("--all-notes", action="store_true", help="Scan all .md files in vault, ignoring date filter.")
+    parser.add_argument("--embedding-mode", choices=("off", "auto"), default="auto", help="Use dense embeddings when config/env is available.")
+    parser.add_argument("--dense-weight", type=float, default=0.45, help="Weight for dense embedding similarity.")
+    parser.add_argument("--sparse-weight", type=float, default=0.55, help="Weight for sparse explainable similarity.")
     parser.add_argument("--version", action="version", version=f"continuous-problem-field {VERSION}")
     return parser.parse_args()
 
@@ -423,15 +433,26 @@ def reconstruct_field(
     time_sigma: float,
     semantic_sigma: float,
     all_notes: bool = False,
+    query_dense: list[float] | None = None,
+    dense_weight: float = 0.0,
+    sparse_weight: float = 1.0,
 ) -> tuple[list[FieldHit], float, dict[date, float], dict[date, float]]:
     query_vec = vectorize(query, title=query)
+    dense_weight = max(0.0, float(dense_weight or 0.0))
+    sparse_weight = max(0.0, float(sparse_weight or 0.0))
     hits: list[FieldHit] = []
     daily_current: dict[date, float] = defaultdict(float)
     daily_completion: dict[date, float] = defaultdict(float)
 
     for note in notes:
         field_vec = note.graph_vector or note.vector
-        sem = cosine(query_vec, field_vec)
+        sparse_sem = cosine(query_vec, field_vec)
+        dense_sem = dense_cosine(query_dense, getattr(note, "dense_vector", []))
+        total_weight = sparse_weight + (dense_weight if query_dense and getattr(note, "dense_vector", []) else 0.0)
+        if total_weight <= 0:
+            sem = sparse_sem
+        else:
+            sem = (sparse_sem * sparse_weight + dense_sem * dense_weight) / total_weight
         if sem <= 0:
             continue
         sem_w = semantic_kernel(sem, semantic_sigma)
@@ -448,6 +469,8 @@ def reconstruct_field(
             time_weight=time_w,
             graph_bonus=graph_bonus,
             modifiers=hit_modifiers(note),
+            sparse_semantic=sparse_sem,
+            dense_semantic=dense_sem,
         )
         hits.append(hit)
         current_boost = 1.0
@@ -645,8 +668,17 @@ def run(args: argparse.Namespace) -> FieldResult:
     time_sigma = args.time_sigma if args.time_sigma != 30.0 else float(saved.get("time_sigma", args.time_sigma))
     graph_alpha = args.graph_alpha if args.graph_alpha != 0.35 else float(saved.get("graph_alpha", args.graph_alpha))
     graph_steps = args.graph_steps if args.graph_steps != 2 else int(saved.get("graph_steps", args.graph_steps))
+    dense_weight = args.dense_weight if args.dense_weight != 0.45 else float(saved.get("dense_weight", args.dense_weight))
+    sparse_weight = args.sparse_weight if args.sparse_weight != 0.55 else float(saved.get("sparse_weight", args.sparse_weight))
     notes = read_notes(vault, today, args.days, args.max_notes, all_notes=all_notes_flag)
     diffuse_graph(notes, graph_steps, graph_alpha)
+    query_dense: list[float] = []
+    if getattr(args, "embedding_mode", "auto") == "auto" and dense_weight > 0:
+        try:
+            hydrate_note_embeddings(notes, vault, Path(__file__).resolve().parent)
+            query_dense = embed_query(args.query, vault, Path(__file__).resolve().parent)
+        except Exception:
+            query_dense = []
     hits, field_energy, daily_current, daily_completion = reconstruct_field(
         notes=notes,
         query=args.query,
@@ -655,6 +687,9 @@ def run(args: argparse.Namespace) -> FieldResult:
         time_sigma=time_sigma,
         semantic_sigma=semantic_sigma,
         all_notes=all_notes_flag,
+        query_dense=query_dense,
+        dense_weight=dense_weight,
+        sparse_weight=sparse_weight,
     )
     if all_notes_flag and daily_current:
         start = min(daily_current.keys())
