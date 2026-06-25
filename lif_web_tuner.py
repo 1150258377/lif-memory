@@ -72,19 +72,50 @@ PROVIDER_PRESETS = {
 }
 
 
+def llm_local_config_paths() -> list[Path]:
+    paths = [
+        Path(__file__).resolve().parent / "config" / "llm.local.json",
+        Path.home() / ".lif-memory" / "llm.local.json",
+    ]
+    env_path = os.environ.get("LIF_LLM_CONFIG")
+    if env_path:
+        paths.append(Path(env_path))
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path.resolve() if path.is_absolute() else path)
+        if key not in seen:
+            unique.append(path)
+            seen.add(key)
+    return unique
+
+
 def llm_local_config_path() -> Path:
-    return Path(__file__).resolve().parent / "config" / "llm.local.json"
+    for path in llm_local_config_paths():
+        if path.exists():
+            return path
+    return llm_local_config_paths()[0]
 
 
 def _read_llm_local_config() -> dict:
-    path = llm_local_config_path()
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    merged: dict = {}
+    merged_keys: dict = {}
+    for path in llm_local_config_paths():
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                continue
+            keys = data.get("api_keys", {})
+            if isinstance(keys, dict):
+                merged_keys.update(keys)
+            merged.update({k: v for k, v in data.items() if k != "api_keys"})
+        except Exception:
+            continue
+    if merged_keys:
+        merged["api_keys"] = merged_keys
+    return merged
 
 
 def build_llm_config(
@@ -119,6 +150,7 @@ def build_llm_config(
         "base_url": (base_url or str(local_cfg.get("base_url") or preset["base_url"])).strip(),
         "model": (model or str(local_cfg.get("model") or preset["model"])).strip(),
         "api_key": str(resolved_key or "").strip(),
+        "config_path": str(llm_local_config_path()),
     }
 
 
@@ -128,7 +160,6 @@ def save_llm_local_config(provider: str, base_url: str, model: str, api_key: str
     base_url = base_url.strip() or PROVIDER_PRESETS[provider]["base_url"]
     model = model.strip() or PROVIDER_PRESETS[provider]["model"]
 
-    path = llm_local_config_path()
     local_cfg = _read_llm_local_config()
     api_keys = local_cfg.get("api_keys", {})
     if not isinstance(api_keys, dict):
@@ -142,9 +173,17 @@ def save_llm_local_config(provider: str, base_url: str, model: str, api_key: str
         "model": model,
         "api_keys": api_keys,
     })
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(local_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-    return build_llm_config(provider, model=model, base_url=base_url, prefer_local_provider=False)
+    last_error: Exception | None = None
+    for path in llm_local_config_paths():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(local_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+            cfg = build_llm_config(provider, model=model, base_url=base_url, prefer_local_provider=False)
+            cfg["config_path"] = str(path)
+            return cfg
+        except Exception as e:
+            last_error = e
+    raise last_error or OSError("cannot write llm config")
 
 
 def public_llm_config() -> dict:
@@ -154,7 +193,7 @@ def public_llm_config() -> dict:
         "base_url": cfg.get("base_url", ""),
         "model": cfg.get("model", ""),
         "has_key": bool(cfg.get("api_key")),
-        "config_path": str(llm_local_config_path()),
+        "config_path": str(cfg.get("config_path") or llm_local_config_path()),
         "providers": {
             name: {"base_url": p["base_url"], "model": p["model"], "env": p["env"]}
             for name, p in PROVIDER_PRESETS.items()
@@ -1506,8 +1545,8 @@ async function loadLlmConfig(){
     keyEl.placeholder=d.has_key?'已配置，留空表示不修改':'粘贴 API Key';
     status.className='llm-status '+(d.has_key?'ok':'bad');
     status.textContent=d.has_key
-      ? `已配置 ${d.provider} / ${d.model}。配置保存在本机，不会上传。`
-      : `未配置 API Key。请选择 provider，填入 API Key 后保存。`;
+      ? `已配置 ${d.provider} / ${d.model}。保存位置：${d.config_path||'本机配置'}`
+      : `未配置 API Key。请选择 provider，填入 API Key 后保存。保存位置：${d.config_path||'本机配置'}`;
   }catch(e){
     status.className='llm-status bad';
     status.textContent='读取配置失败：'+e;
@@ -1542,7 +1581,7 @@ async function saveLlmConfig(){
     await loadLlmConfig();
     const cfg=d.config||{};
     status.className='llm-status ok';
-    status.textContent=`已保存：${cfg.provider||payload.provider} / ${cfg.model||payload.model}`;
+    status.textContent=`已保存：${cfg.provider||payload.provider} / ${cfg.model||payload.model}。保存位置：${cfg.config_path||'本机配置'}`;
   }catch(e){
     status.className='llm-status bad';
     status.textContent='保存失败：'+e.message;
