@@ -642,3 +642,116 @@ spike -> evidence recall -> action trigger
 ```
 
 Original notes preserve information. State voltage preserves trend. Spikes trigger action.
+
+## Continuous Semantic Field Web Tuner
+
+The project now also includes a browser-based continuous-field tuner:
+
+```powershell
+python lif_web_tuner.py --vault "C:\path\to\your\obsidian-vault" --llm-provider deepseek
+```
+
+The web tuner extends the original replay pipeline:
+
+```text
+Obsidian notes
+-> sparse explainable signals
+-> optional dense embeddings
+-> graph diffusion
+-> continuous semantic/problem field
+-> topic LIF voltage
+-> multi-channel LIF neurons
+-> LLM insight / debate
+-> feedback reward update
+```
+
+It persists local state in the vault:
+
+```text
+lif_field_state.json       cached note vectors and topic voltages
+lif_field_params.json      tunable field parameters
+lif_sessions.json          web chat history
+lif_conclusions.json       distilled conclusions
+lif_domain_state.json      concept/relation/neuron/reward state
+lif_embedding_cache.json   local/API embedding cache
+```
+
+These files can contain private note-derived data and are ignored by `.gitignore`.
+
+### Hybrid Embedding Mode
+
+The field score can mix two semantic channels:
+
+```text
+hybrid_similarity =
+  dense_similarity * dense_weight
+  + sparse_similarity * sparse_weight
+```
+
+- `sparse_similarity` comes from the deterministic rule-based vectorizer and remains explainable.
+- `dense_similarity` comes from an embedding model when one is configured.
+- If no embedding model is configured, the system automatically falls back to sparse-only mode.
+
+The web UI exposes `dense_weight` and `sparse_weight` in the parameter panel.
+
+### Local FlagEmbedding / BGE Model
+
+`lif_field_learning.py` supports OpenAI-compatible embedding APIs and local embedding models.
+
+For local FlagEmbedding/BGE usage, install or download a real model directory such as `bge-small-zh-v1.5`, `bge-base-zh-v1.5`, or `bge-m3`. The model directory should contain files such as:
+
+```text
+config.json
+tokenizer.json
+tokenizer_config.json
+model.safetensors or pytorch_model.bin
+```
+
+Then configure environment variables:
+
+```powershell
+$env:LIF_EMBEDDING_PROVIDER="flag"
+$env:LIF_FLAGEMBEDDING_SOURCE="C:\Users\Administrator\Downloads\FlagEmbedding-master\FlagEmbedding-master"
+$env:LIF_EMBEDDING_MODEL_PATH="C:\path\to\your\bge-model"
+$env:LIF_EMBEDDING_DEVICE="cpu"
+```
+
+Alternatively copy and edit:
+
+```powershell
+Copy-Item config\embedding.local.example.json config\embedding.local.json
+notepad config\embedding.local.json
+```
+
+`config\embedding.local.json` is ignored and should not be committed.
+
+### Domain State and Multi-LIF Neurons
+
+The web tuner keeps a long-running domain state in `lif_domain_state.json`.
+
+Current neuron channels:
+
+```text
+semantic_density   evidence concentration
+novelty            new combinations or unexpected signals
+conflict           blockers, contradictions, repeated failures
+action_pressure    pressure toward experiment, writing, or cleanup
+integration        pressure to synthesize a high-value insight card
+```
+
+These channels are not yet a full spiking neural network. They are persistent LIF controller neurons layered on top of the main topic voltage. The intended direction is:
+
+```text
+concept neurons + relation neurons + regulator neurons + reward updates
+```
+
+### Feedback Learning
+
+User feedback is converted into a lightweight reward signal. The system records feedback in `lif_domain_state.json` and adjusts field parameters conservatively, for example:
+
+```text
+positive feedback -> slightly raise dense semantic weight and lower trigger friction
+negative feedback -> widen semantic matching carefully and raise the spike threshold
+```
+
+This is not model fine-tuning. It is reward-shaped controller learning for the memory-field parameters.
