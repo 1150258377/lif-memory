@@ -12,12 +12,22 @@ Obsidian 笔记
 -> Obsidian 图扩散
 -> 连续问题场
 -> LIF 电压 / spike
--> LLM 回答或多智能体辩论
+-> AhaEngine 解释重构
+-> LLM 回答、review 或多智能体辩论
 -> 用户反馈
 -> 控制器参数更新
 ```
 
-原始笔记仍然保存在 Obsidian 中。LIF-Memory 只保存派生出来的场状态、会话、反馈、embedding 缓存和调参结果。
+原始笔记仍然保存在 Obsidian 中。LIF-Memory 只保存派生出来的场状态、会话、反馈、embedding 缓存、AhaCard 和调参结果。
+
+核心边界：
+
+```text
+Spike is not insight.
+Spike only opens the gate for insight reconstruction.
+```
+
+也就是说，LIF 负责判断“什么时候该重构”，AhaEngine 负责生成“到底想通了什么”。
 
 ## 已实现功能
 
@@ -26,6 +36,7 @@ Obsidian 笔记
 | Obsidian 扫描 | 递归扫描 Markdown，保留来源路径、片段、关键词和证据分数，忽略 `.git`、`.obsidian`、缓存目录等。 |
 | LIF 记忆回放 | 跟踪主题电压、泄漏、阈值、冷却、优先级、完成抑制、spike 触发和人工关闭反馈。 |
 | 连续问题场 | 根据时间距离、稀疏语义、dense embedding、Obsidian 链接图和 LIF 压力重建一个 query-specific field。 |
+| AhaEngine 顿悟层 | 将 spike 转换成 `old_model / contradiction / new_model / action_delta / falsification_test`，避免只停留在提醒或总结。 |
 | 网页调参器 | 提供浏览器界面，支持扫描笔记、提问、查看证据、历史会话、结论沉淀、参数调节、反馈学习。 |
 | 历史记录 | 网页端会把对话保存到 `lif_sessions.json`，可以继续之前的问题链，而不是每次从零开始。 |
 | 混合 embedding | 支持稀疏可解释向量 + dense embedding 混合评分，可接 OpenAI-compatible API 或本地 FlagEmbedding/BGE。 |
@@ -34,6 +45,78 @@ Obsidian 笔记
 | LLM 适配 | 支持 Qwen/DashScope、DeepSeek、Kimi、GLM/Zhipu 以及自定义 OpenAI-compatible endpoint。 |
 | 图谱挖掘 | 读取 Obsidian wikilink、文件夹、标签，分析 hub、bridge、未解析链接和状态证据。 |
 | 洞察 profile | 支持经济学等领域 profile，把 voltage 解释为解释张力，而不只是任务压力。 |
+
+## AhaEngine / 顿悟层
+
+AhaEngine 是 spike 之后的 belief-update layer。它不负责检索，也不负责改变 LIF 电压；它只负责把一次 spike 转换成可审计的“解释重构”。
+
+输入可以来自：
+
+```text
+lif_memory.py --json-output              spike packet
+unsupervised_memory_field.py --json-output  high reconstruction-loss observations
+continuous_problem_field.py --json-output   field hits / reconstruction pressure
+```
+
+输出为 AhaCard：
+
+```json
+{
+  "old_model": "旧解释或隐含假设",
+  "contradiction": "让旧解释解释不通的证据",
+  "new_model": "新的压缩解释",
+  "essence": "一句话本质判断",
+  "action_delta": "这个洞察让下一步行动发生什么变化",
+  "falsification_test": "如何证明这个洞察是错的"
+}
+```
+
+一个有效顿悟卡至少必须有：
+
+```text
+new_model
+action_delta
+falsification_test
+```
+
+没有 `new_model`，它只是总结。没有 `action_delta`，它只是漂亮语言。没有 `falsification_test`，它很难和幻觉区分。
+
+### AhaEngine 快速运行
+
+先生成 LIF spike：
+
+```powershell
+python lif_memory.py --vault "C:\path\to\vault" --days 14 --json-output lif_spikes.json
+```
+
+可选：生成自动 latent slot 和高重建误差证据：
+
+```powershell
+python unsupervised_memory_field.py --vault "C:\path\to\vault" --days 14 --json-output unsupervised_field.json
+```
+
+生成顿悟卡：
+
+```powershell
+python aha_engine.py `
+  --spikes lif_spikes.json `
+  --reconstruction unsupervised_field.json `
+  --query "为什么 LIF-Memory 没有人的灵光一闪？" `
+  --output "LIF-Memory AhaCards.md" `
+  --json-output lif_aha_cards.json
+```
+
+内置 demo：
+
+```powershell
+python aha_engine.py --demo
+```
+
+可选 LLM 增强：
+
+```powershell
+python aha_engine.py --demo --llm-synthesize --llm-provider deepseek
+```
 
 ## 快速运行网页端
 
@@ -205,7 +288,7 @@ integration        需要整合成洞察卡或稳定结论的压力
 
 反馈学习目前是轻量 controller learning，不是模型微调。
 
-已经实现：
+已实现：
 
 - 记录用户反馈。
 - 把反馈转成 reward scalar。
@@ -262,7 +345,7 @@ python lif_memory_stateful.py --vault "C:\path\to\vault" --days 14 --state-file 
 
 ## LLM Provider
 
-LLM 层负责语义解释、回答、review、debate。它不直接控制 LIF 电压和阈值。
+LLM 层负责语义解释、回答、review、debate，也可选用于 AhaEngine 的 `--llm-synthesize`。它不直接控制 LIF 电压和阈值。
 
 内置 provider：
 
@@ -295,6 +378,7 @@ config/llm.local.json
 | `lif_web_tuner.py` | 网页端入口：扫描、查询、回答、历史记录、结论、反馈、参数调节。 |
 | `lif_field_learning.py` | embedding 配置/cache、本地 FlagEmbedding、领域状态、多 LIF 神经元、reward update。 |
 | `continuous_problem_field.py` | 连续问题场 CLI：稀疏/dense 语义、图扩散、LIF scoring。 |
+| `aha_engine.py` | Spike 后解释重构层：生成 old_model、contradiction、new_model、action_delta、falsification_test。 |
 | `lif_memory.py` | 核心 LIF 回放引擎。 |
 | `lif_memory_stateful.py` | 带持久 voltage/topic state 的回放入口。 |
 | `llm_adapter.py` | OpenAI-compatible LLM review adapter。 |
@@ -302,7 +386,7 @@ config/llm.local.json
 | `insight_integrator.py` | 领域洞察 profile，例如 economics。 |
 | `knowledge_maze_explorer.py` | 知识迷宫式路径探索。 |
 | `memory_field.py` / `unsupervised_memory_field.py` | 实验性记忆场组件。 |
-| `docs/` | 架构、relation spike、连续问题场、后续路线文档。 |
+| `docs/` | 架构、relation spike、连续问题场、AhaEngine、后续路线文档。 |
 
 ## 典型工作流
 
@@ -322,6 +406,12 @@ query -> 相关笔记 -> field score -> Markdown / JSON 输出
 
 ```text
 最近笔记 -> state voltage -> top spike -> closure 反馈
+```
+
+Spike 后顿悟重构：
+
+```text
+lif_spikes.json + high_loss observations -> AhaEngine -> lif_aha_cards.json / AhaCards.md
 ```
 
 图谱结构分析：
@@ -350,9 +440,10 @@ lif_domain_state.json
 lif_embedding_cache.json
 lif_state.json
 lif_memory_feedback.json
+lif_aha_cards.json
 ```
 
-它们可能包含私人笔记派生信息、本地模型路径、会话历史、反馈历史或 API 配置。
+它们可能包含私人笔记派生信息、本地模型路径、会话历史、反馈历史、AhaCard 或 API 配置。
 
 ## 当前不是哪些东西
 
@@ -364,7 +455,7 @@ LIF-Memory 目前还不是：
 - Obsidian 原始笔记的替代品；
 - 保证客观正确的自动决策系统。
 
-它目前是一个本地、可审计的记忆场原型：用 LIF 状态负责触发，用 embedding 提高召回，用图扩散恢复联系，用 LLM 改善解释，用人工反馈更新控制器。
+它目前是一个本地、可审计的记忆场原型：用 LIF 状态负责触发，用 embedding 提高召回，用图扩散恢复联系，用 AhaEngine 做解释重构，用 LLM 改善解释，用人工反馈更新控制器。
 
 ## 设计方向
 
@@ -374,6 +465,8 @@ LIF-Memory 目前还不是：
 零散笔记
 -> 连续语义场
 -> 概念 / 关系 / 调节神经元
+-> spike 触发
+-> AhaEngine belief update
 -> 反馈塑形的 controller learning
 -> 更高质量的洞察 spike 和行动 spike
 ```
@@ -384,7 +477,8 @@ LIF-Memory 目前还不是：
 LIF 负责触发。
 Embedding 负责语义召回。
 图扩散负责恢复联系。
-LLM 负责解释和辩论。
+AhaEngine 负责解释重构。
+LLM 负责解释、review、辩论和可选合成增强。
 用户反馈负责调节控制器。
 原始笔记永远是 source of truth。
 ```
