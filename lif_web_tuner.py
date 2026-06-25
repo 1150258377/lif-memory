@@ -574,7 +574,12 @@ def call_llm(messages: list[dict]) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        # Windows/Python may inherit broken HTTP_PROXY/HTTPS_PROXY env vars.
+        # Use direct access by default; set LIF_USE_SYSTEM_PROXY=1 to opt in.
+        opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler(None if os.environ.get("LIF_USE_SYSTEM_PROXY") == "1" else {})
+        )
+        with opener.open(req, timeout=60) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         return data["choices"][0]["message"]["content"]
     except Exception as e:
