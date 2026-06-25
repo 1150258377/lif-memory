@@ -15,8 +15,10 @@ lif_spikes.json
 lif_insights.json
 lif_inspiration.json
 lif_state.json
+lif_memory_events.json
+lif_dynamic_memory_packet.json
+LIF-Dynamic-Memory-Report.md
 *.local.json
 
 # Local Obsidian/cache files if the project is copied into a vault.
 .obsidian/
-.trash/
