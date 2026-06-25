@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "provider": "flag",
+  "source_path": "C:\\Users\\Administrator\\Downloads\\FlagEmbedding-master\\FlagEmbedding-master",
+  "model_path": "C:\\path\\to\\your\\bge-model",
+  "device": "cpu",
+  "model_class": "auto"
+}
