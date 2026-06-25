@@ -1,270 +1,251 @@
 # LIF-Memory
 
-LIF-Memory 是一个面向 Obsidian 笔记的事件驱动记忆回放原型。
+LIF-Memory 是一个面向 Obsidian 笔记的本地记忆场系统。它把分散的 Markdown 笔记转换成可追溯的语义场，让长期问题在 LIF 电压中持续积累，并在证据足够时触发 spike，提醒你重新处理真正重要的问题。
 
-它的目标不是把笔记压缩成另一套摘要，也不是用 spike 重建完整语言；原始信息仍然保存在 Obsidian 中。LIF-Memory 做的是把日记、项目笔记和思考片段映射到低维的 LIF 状态变量中，当某个主题的“行动压力”或“解释张力”持续累积并超过阈值时，系统会生成带证据来源的 spike 事件包，提醒你回到真正需要处理的问题。
-
-```text
-原始笔记 -> 证据抽取 -> LIF 状态 -> 阈值触发 -> 证据链 spike -> 下一步行动/洞察卡
-```
-
-## 项目能做什么
-
-- 从 Obsidian 日记和项目笔记中抽取和主题相关的证据片段。
-- 用 LIF 电位模拟某个主题的持续压力、遗留问题和完成信号。
-- 在阈值触发时生成可追溯的 spike 事件包，而不是只给出空泛提醒。
-- 支持行动型回放，例如实验、论文、职业、AI 记忆、健康等状态。
-- 支持思想型 profile，例如经济学洞察，把零散观点积累成可写作的洞察卡。
-- 支持反馈闭环，把“有用、太早、已完成、不要再提醒”等人工反馈写回状态。
-
-## 适合的使用场景
-
-这个项目适合用来管理长期、反复出现、容易在笔记里分散的问题，例如：
+它不是普通的笔记摘要工具，也不是单纯的向量数据库封装。当前主线是：
 
 ```text
-论文闭环
-实验数据整理
-LIF / 后向散射研究链路
-AI 记忆系统构建
-经济学主题洞察
-健康和精力恢复
+Obsidian 笔记
+-> 证据片段抽取
+-> 稀疏可解释语义信号
+-> 可选 dense embedding
+-> Obsidian 图扩散
+-> 连续问题场
+-> LIF 电压 / spike
+-> LLM 回答或多智能体辩论
+-> 用户反馈
+-> 控制器参数更新
 ```
 
-它不会替你决定最终答案，而是帮你找出：哪些问题已经积累了足够证据，应该被重新打开、隔离处理、降级，或者关闭。
+原始笔记仍然保存在 Obsidian 中。LIF-Memory 只保存派生出来的场状态、会话、反馈、embedding 缓存和调参结果。
 
-## 快速开始
+## 已实现功能
 
-在 Obsidian 仓库根目录运行：
+| 模块 | 已经能做什么 |
+| --- | --- |
+| Obsidian 扫描 | 递归扫描 Markdown，保留来源路径、片段、关键词和证据分数，忽略 `.git`、`.obsidian`、缓存目录等。 |
+| LIF 记忆回放 | 跟踪主题电压、泄漏、阈值、冷却、优先级、完成抑制、spike 触发和人工关闭反馈。 |
+| 连续问题场 | 根据时间距离、稀疏语义、dense embedding、Obsidian 链接图和 LIF 压力重建一个 query-specific field。 |
+| 网页调参器 | 提供浏览器界面，支持扫描笔记、提问、查看证据、历史会话、结论沉淀、参数调节、反馈学习。 |
+| 历史记录 | 网页端会把对话保存到 `lif_sessions.json`，可以继续之前的问题链，而不是每次从零开始。 |
+| 混合 embedding | 支持稀疏可解释向量 + dense embedding 混合评分，可接 OpenAI-compatible API 或本地 FlagEmbedding/BGE。 |
+| 多 LIF 神经元 | 除主主题电压外，还维护语义密度、新颖性、冲突、行动压力、整合压力等控制器神经元。 |
+| 反馈学习 | 将“有用/无用/太早/太晚/完成”等反馈转成轻量 reward，保守更新场参数和领域状态。 |
+| LLM 适配 | 支持 Qwen/DashScope、DeepSeek、Kimi、GLM/Zhipu 以及自定义 OpenAI-compatible endpoint。 |
+| 图谱挖掘 | 读取 Obsidian wikilink、文件夹、标签，分析 hub、bridge、未解析链接和状态证据。 |
+| 洞察 profile | 支持经济学等领域 profile，把 voltage 解释为解释张力，而不只是任务压力。 |
+
+## 快速运行网页端
+
+在项目目录中运行：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --output "LIF-Memory 回放结果.md"
+python lif_web_tuner.py --vault "C:\path\to\your\obsidian-vault" --llm-provider deepseek
 ```
 
-只预览结果、不写入文件：
+默认端口：
+
+```text
+http://127.0.0.1:7860
+```
+
+如果项目就在 Obsidian vault 内，也可以：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --dry-run
+python lif_web_tuner.py --vault "." --llm-provider deepseek
 ```
 
-运行经济学洞察 profile：
+网页端是当前最完整的入口，适合用来做连续语义场查询、历史对话、调参和反馈。
+
+## 网页端具体能力
+
+`lif_web_tuner.py` 目前包含这些实际功能：
+
+- 扫描 vault：读取全库 Markdown，建立字段缓存。
+- 提问：把用户问题投影到连续问题场中，返回证据和回答。
+- 历史会话：把网页对话保存到 `lif_sessions.json`，可恢复旧会话。
+- 结论沉淀：把高价值结论保存到 `lif_conclusions.json`。
+- 参数面板：调节 threshold、time kernel、graph diffusion、dense weight、sparse weight 等。
+- 证据面板：展示哪些笔记片段支撑了当前回答。
+- 多智能体辩论：可以让不同视角先辩论，再综合输出。
+- 反馈按钮：把用户判断转成 reward，更新本地领域状态。
+- 神经元面板：显示当前多通道 LIF 神经元状态。
+
+网页端会在 vault 中写入这些本地状态文件：
+
+```text
+lif_field_state.json       笔记向量、主题电压、扫描缓存
+lif_field_params.json      网页调参参数
+lif_sessions.json          网页历史会话
+lif_conclusions.json       沉淀结论
+lif_domain_state.json      概念、关系、神经元、反馈 reward
+lif_embedding_cache.json   embedding 缓存
+```
+
+这些文件可能包含私人笔记派生信息，已经被 `.gitignore` 排除，不应该上传到 GitHub。
+
+## 连续问题场
+
+连续问题场的目标是把零散笔记变成一个可以查询、可以扩散、可以积累压力的语义空间。
+
+每条笔记 observation 会被映射为：
+
+```text
+时间信号        这条笔记距离当前查询窗口有多近
+稀疏语义        规则向量，便于解释为什么命中
+dense 语义      embedding 相似度，用于捕捉换一种说法的同义关系
+图结构信号      Obsidian wikilink / 文件关系的扩散结果
+LIF 压力        长期未解决问题累积出来的 voltage
+```
+
+命令行入口：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --days 90 --output "经济学 LIF 洞察.md"
+python continuous_problem_field.py --vault "C:\path\to\vault" --query "论文第四章实验为什么一直卡住" --all-notes --top-k 8
 ```
 
-## 核心思想
-
-LIF-Memory 把笔记系统看作一个记忆网络：
-
-```text
-原始笔记保存完整信息
-证据片段提供输入电流
-主题状态累积电位 V
-完成信号抑制重复触发
-超过阈值后生成 spike
-spike 指向下一步行动或洞察写作
-```
-
-其中 `V` 不是 token 数，也不是 embedding 维度，而是某个主题尚未解决的压力或解释张力。这个设计让系统可以保留原始笔记的细节，同时用一个低维状态追踪“现在什么事情值得被重新看见”。
-
-## What was optimized in v0.2.0
-
-This version makes the LIF replay more useful as an actual memory/action trigger:
-
-- Recursive Obsidian daily-note discovery with ignored folders such as `.git`, `.obsidian`, `.venv`, and `node_modules`.
-- Evidence packets now keep source path, snippet, matched keywords, score, and modifiers.
-- LIF leakage now respects date gaps: `V_new = decay^delta_days * V_old + input - completion`.
-- Added per-state `evidence_cap` to avoid one noisy note saturating the whole system.
-- Added `--states`, `--dry-run`, and `--json-output` for debugging and downstream agent use.
-- Markdown output now includes a summary table, state trajectory, spike cards, and practical tuning rules.
-
-## What was optimized in v0.3.0
-
-The input current is no longer just a raw keyword score.
-
-Each note fragment is now mapped into an `EvidenceVector` before it charges a state:
-
-```text
-fragment -> evidence vector -> state input current -> LIF voltage
-```
-
-The vector contains:
-
-```text
-target_weight   how strongly this fragment belongs to the state
-actionability   whether the fragment implies a possible next action
-urgency         whether it has time pressure
-blocker         whether it describes a blockage or conflict
-completion      whether it looks completed and should inhibit repeated spikes
-specificity     whether it contains concrete values, devices, metrics, or links
-novelty         whether it introduces a new claim or breakthrough
-confidence      confidence from keyword/context support
-```
-
-This is still a deterministic rule-based vector layer, not a neural embedding model. It is intentionally designed so it can later be replaced by a real embedding/classifier layer without changing the LIF state update.
-
-The first practical gain is disambiguation. For example, `恢复` in `后向散射恢复/波形恢复` charges `Experiment`, while `身体恢复/情绪恢复` charges `Health`.
-
-## What was optimized in v0.4.0
-
-Spike packets now include an action-decision layer. The system no longer only asks:
-
-```text
-which state crossed threshold?
-```
-
-It also asks:
-
-```text
-should this be continued, isolated, downgraded, or handled after recovery?
-```
-
-Each spike packet now includes:
-
-```text
-topic
-priority          P0 | P1 | P2
-blocker_type      none | repeated_failure | unclear_definition | emotional_overload
-action_policy     continue | isolate | downgrade | recover_first
-completion_target one small result that can be judged complete
-```
-
-The first loop detector is intentionally simple: if the same topic appears across multiple days with blocker signals and few completion signals, the spike is routed to isolation instead of generic continuation. For example, repeated `负阻` failures become `blocker_type=repeated_failure` and `action_policy=isolate`.
-
-## What was optimized in v0.5.0
-
-The stateful runner now persists topic history in `lif_state.json`.
-
-This means incremental runs no longer remember only neuron voltage. They also remember topic-level loop evidence:
-
-```text
-topic -> days_seen / completion_count / blocker_count / evidence_count / last_action_policy
-```
-
-This is the first step from one-window replay toward long-running feedback memory. A repeated blocker such as `负阻` can continue to be routed as an isolation problem even when only the newest daily note is processed.
-
-## What was optimized in v0.6.0
-
-Each state now has two voltage traces:
-
-```text
-V_fast  recent acute pressure
-V_slow  long-running background pressure
-V       weighted combination used for threshold crossing
-```
-
-The update is:
-
-```text
-V_fast = max(0, V_fast_old * fast_decay^delta_days + evidence_input - completion_inhibition)
-V_slow = max(0, V_slow_old * slow_decay^delta_days + evidence_input * slow_input_ratio - completion_inhibition * slow_completion_ratio)
-V = weighted_sum(V_fast, V_slow)
-```
-
-Different states can now remember at different speeds. Experiments leak faster, career and AI-memory pressure leak more slowly, and health pressure rises quickly but is more strongly reduced by recovery/completion signals.
-
-## What was optimized in v0.7.0
-
-Replay can now consume manual feedback and turn it into topic policies.
-
-Supported feedback labels:
-
-```text
-有用 / 没用 / 太早 / 太晚 / 已完成 / 不要再提醒 / 升为P0 / 降为P2
-```
-
-Feedback is stored as a topic-level policy:
-
-```text
-topic -> threshold_delta / priority_override / action_policy_override / muted / cooldown_days
-```
-
-Example `lif_feedback.json`:
-
-```json
-{
-  "feedback": [
-    {
-      "topic": "负阻",
-      "feedback": "不要再提醒"
-    },
-    {
-      "topic": "论文闭环",
-      "feedback": "太晚"
-    }
-  ]
-}
-```
-
-Run with feedback:
+带 embedding 和图扩散的示例：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --feedback-file "lif_feedback.json" --output "LIF-Memory 回放结果.md"
+python continuous_problem_field.py `
+  --vault "C:\path\to\vault" `
+  --query "AI 记忆系统下一步应该怎么做" `
+  --embedding-mode auto `
+  --dense-weight 0.45 `
+  --sparse-weight 0.55 `
+  --graph-steps 2 `
+  --graph-alpha 0.35 `
+  --json-output field.json
 ```
 
-In the stateful runner, feedback policies are persisted in `lif_state.json` under `topic_policies`.
+如果没有配置 embedding，系统会自动退回稀疏语义模式。
 
-## What was optimized in v0.7.1
+## 向量数据库路径 vs 联系场路径
 
-This is a calibration release for the semantic interface.
+这个项目目前更接近“联系场”，不是传统向量数据库。
 
-It fixes the main failure mode where experimental data fragments could be mislabeled as career/job topics because of broad words such as `工作`.
+| 路径 | 核心机制 | 优势 | 局限 |
+| --- | --- | --- | --- |
+| 真实向量数据库 | 文本 chunk -> embedding -> ANN 检索 | 语义召回强，适合大规模相似搜索 | 解释性弱，通常只回答“像不像”，不负责长期电压和反馈状态 |
+| LIF 联系场 | 笔记 -> 稀疏语义 + dense 语义 + 图扩散 + LIF 电压 | 能解释来源，能保留长期问题压力，能结合反馈和神经元状态 | 不是高性能向量库，embedding 部分仍需要模型质量支撑 |
 
-Implemented in v0.7.1:
+当前实现采用混合方式：
 
 ```text
-stronger topic/state mapping
-forced priority table for mainline topics
-primary_state / secondary_states in spike packets
-optional local completion-signal scan
+hybrid_similarity =
+  dense_similarity * dense_weight
+  + sparse_similarity * sparse_weight
 ```
 
-Priority policy:
+`dense_similarity` 负责语义召回，`sparse_similarity` 负责可解释性。LIF 电压和图扩散负责把“单次相似”提升为“长期问题场”。
+
+## 本地 FlagEmbedding / BGE 接入
+
+`lif_field_learning.py` 支持两种 dense embedding 来源：
 
 ```text
-论文闭环 / LIF链路 / 实验数据模板 / Health -> P0
-负阻 -> P1 by default, isolate if repeated failure
-AI记忆 -> P2 unless it is AI求职转向
-AI求职转向 -> Career primary, AI_Memory secondary
+api    OpenAI-compatible embedding API
+flag   本地 FlagEmbedding / sentence-transformers 风格模型
 ```
 
-Optional completion scan:
+复制本地配置模板：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --completion-scan
+Copy-Item config\embedding.local.example.json config\embedding.local.json
+notepad config\embedding.local.json
 ```
 
-## What was optimized in v0.7.2
+环境变量示例：
 
-This is the completion-loop release. The system can now close spikes instead of only generating them.
+```powershell
+$env:LIF_EMBEDDING_PROVIDER="flag"
+$env:LIF_FLAGEMBEDDING_SOURCE="C:\path\to\FlagEmbedding-master"
+$env:LIF_EMBEDDING_MODEL_PATH="C:\path\to\your\bge-model"
+$env:LIF_EMBEDDING_DEVICE="cpu"
+```
 
-Implemented in v0.7.2:
+`LIF_EMBEDDING_MODEL_PATH` 应该指向真正的模型目录，例如 `bge-small-zh-v1.5`、`bge-base-zh-v1.5` 或 `bge-m3`。
+
+典型模型目录应包含：
 
 ```text
-topic-specific completion targets
-stable spike_id for every spike
-Markdown Spike feedback section
-done / downgraded / ignored / postponed closure parsing
-closure-derived cooldown and priority/action policy updates
-daily top-spike rendering
+config.json
+tokenizer.json
+tokenizer_config.json
+model.safetensors 或 pytorch_model.bin
 ```
 
-Default replay output now appends:
+`config/embedding.local.json` 是本地私有配置，不应提交。
 
-```markdown
-## Spike 反馈区
+## 多 LIF 神经元
 
-- [ ] 2026-06-15-Experiment-负阻
-  - Topic：负阻
-  - Primary：Experiment
-  - Policy：isolate
-  - 状态：open
-  - 反馈：
-  - 完成证据：
-  - 关闭时间：
+经典 LIF 回放默认跟踪这些主状态：
+
+```text
+Experiment
+Thesis
+Career
+AI_Memory
+Health
 ```
 
-To close a spike, edit it manually:
+网页端新增了一组领域控制器神经元，保存在 `lif_domain_state.json`：
+
+```text
+semantic_density   当前问题场的证据密度
+novelty            新组合、新信号、新方向
+conflict           冲突、阻塞、反复失败
+action_pressure    需要实验、写作、整理、决策的压力
+integration        需要整合成洞察卡或稳定结论的压力
+```
+
+这些还不是完整的 spiking neural network。它们是 LIF 风格的调节神经元，用来观察语义场是否变得更密、更冲突、更行动导向，或者更接近可整合状态。
+
+## 反馈学习
+
+反馈学习目前是轻量 controller learning，不是模型微调。
+
+已经实现：
+
+- 记录用户反馈。
+- 把反馈转成 reward scalar。
+- 更新 `lif_domain_state.json` 中的反馈历史、概念状态、神经元状态。
+- 保守调整 dense/sparse 权重、阈值摩擦等场参数。
+
+尚未实现：
+
+- 没有 fine-tune embedding 模型。
+- 没有训练端到端神经网络。
+- 没有做真正梯度下降式强化学习。
+- 没有把用户私有笔记上传到远端训练服务。
+
+当前闭环是：
+
+```text
+用户反馈 -> reward -> 控制器参数更新 -> 下一次问题场重建
+```
+
+## 经典 LIF 记忆回放
+
+原始 Markdown 报告模式仍然可用：
+
+```powershell
+python lif_memory.py --vault "C:\path\to\vault" --days 14 --output "LIF-Memory 回放结果.md"
+```
+
+每日主卡片模式：
+
+```powershell
+python lif_memory.py --vault "C:\path\to\vault" --days 14 --mode daily --top-k 1 --output "今日 LIF-Memory 主卡片.md"
+```
+
+持久状态模式：
+
+```powershell
+python lif_memory_stateful.py --vault "C:\path\to\vault" --days 14 --state-file lif_state.json
+```
+
+关闭 spike 的方式是在 Markdown 里勾选：
 
 ```markdown
 - [x] 2026-06-15-Experiment-负阻
@@ -277,368 +258,133 @@ To close a spike, edit it manually:
   - 关闭时间：2026-06-15
 ```
 
-The next run reads the previous output file by default before overwriting it. A downgraded topic gets lower priority and cooldown.
+下一次运行会读取 closure，并更新 cooldown、topic policy 和 persistent feedback memory。
 
-Daily mode renders only the top action card:
+## LLM Provider
 
-```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --mode daily --top-k 1
-```
+LLM 层负责语义解释、回答、review、debate。它不直接控制 LIF 电压和阈值。
 
-## What was optimized in v0.7.3
-
-This is the persistent feedback-memory release.
-
-Markdown remains the human editing surface, but closed spikes are now persisted to JSON so feedback survives report overwrites.
-
-Default memory path:
+内置 provider：
 
 ```text
-04 项目库/P2_LIF-Memory/lif_memory_feedback.json
+qwen      DASHSCOPE_API_KEY
+deepseek  DEEPSEEK_API_KEY
+kimi      MOONSHOT_API_KEY
+zhipu     ZHIPUAI_API_KEY
 ```
 
-Implemented in v0.7.3:
-
-```text
-read persistent feedback memory before replay
-merge persistent memory with JSON feedback and Markdown closures
-write closed Markdown closures back into persistent JSON
-store cooldown_until / completion_evidence / last_feedback per topic
-expire cooldown penalties after cooldown_until
-preserve durable downgraded topics as P2 / downgrade
-```
-
-Typical daily loop:
-
-```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --mode daily --top-k 1 --output "今日 LIF-Memory 主卡片.md"
-```
-
-After editing the `Spike 反馈区`, run again:
-
-```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --mode daily --top-k 1 --closure-file "今日 LIF-Memory 主卡片.md" --output "今日 LIF-Memory 主卡片.md"
-```
-
-The closure is copied into `lif_memory_feedback.json`, so future reports can be regenerated without losing the fact that a topic was done, ignored, postponed, or downgraded.
-
-## What was optimized in v0.7.4
-
-This is the LLM Reviewer Adapter release.
-
-The LLM is only a semantic sensor. It reviews generated spikes and suggests corrections, but it never updates voltage, threshold, cooldown, priority, or action policy by itself.
-
-Implemented in v0.7.4:
-
-```text
-llm_adapter.py
---llm-review
-OpenAI-compatible chat.completions adapter
-Qwen/DashScope default provider
-DeepSeek / Kimi / GLM provider presets
-LLM Review report section
-```
-
-Provider environment variables:
-
-```text
-qwen      -> DASHSCOPE_API_KEY
-deepseek  -> DEEPSEEK_API_KEY
-kimi      -> MOONSHOT_API_KEY
-zhipu     -> ZHIPUAI_API_KEY
-```
-
-You can also store local keys in the ignored file:
-
-```text
-04 项目库/P2_LIF-Memory/config/llm.local.json
-```
-
-Example:
-
-```json
-{
-  "provider": "deepseek",
-  "api_keys": {
-    "deepseek": "your-key"
-  }
-}
-```
-
-This file matches `.gitignore` via `*.local.json`.
-
-Run daily mode with Qwen review:
-
-```powershell
-$env:DASHSCOPE_API_KEY="your-key"
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --mode daily --top-k 1 --llm-review
-```
-
-Switch provider:
+示例：
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your-key"
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --vault "." --days 14 --mode daily --top-k 1 --llm-review --llm-provider deepseek
+python lif_web_tuner.py --vault "C:\path\to\vault" --llm-provider deepseek
 ```
 
-## Obsidian graph mining
-
-Obsidian is not just a folder of notes. It is a memory graph:
+也可以放在本地私有配置：
 
 ```text
-daily notes     time entry points
-wikilinks       explicit memory edges
-folders         project/domain edges
-tags            manual classification edges
-LIF states      implicit semantic/action edges
+config/llm.local.json
 ```
 
-Run the graph miner from the vault root:
+该文件被 `.gitignore` 排除。
+
+## 文件结构
+
+| 文件 | 作用 |
+| --- | --- |
+| `lif_web_tuner.py` | 网页端入口：扫描、查询、回答、历史记录、结论、反馈、参数调节。 |
+| `lif_field_learning.py` | embedding 配置/cache、本地 FlagEmbedding、领域状态、多 LIF 神经元、reward update。 |
+| `continuous_problem_field.py` | 连续问题场 CLI：稀疏/dense 语义、图扩散、LIF scoring。 |
+| `lif_memory.py` | 核心 LIF 回放引擎。 |
+| `lif_memory_stateful.py` | 带持久 voltage/topic state 的回放入口。 |
+| `llm_adapter.py` | OpenAI-compatible LLM review adapter。 |
+| `obsidian_graph_miner.py` | Obsidian wikilink、folder、tag 图谱挖掘。 |
+| `insight_integrator.py` | 领域洞察 profile，例如 economics。 |
+| `knowledge_maze_explorer.py` | 知识迷宫式路径探索。 |
+| `memory_field.py` / `unsupervised_memory_field.py` | 实验性记忆场组件。 |
+| `docs/` | 架构、relation spike、连续问题场、后续路线文档。 |
+
+## 典型工作流
+
+网页端交互：
+
+```text
+扫描 vault -> 提问 -> 查看证据 -> 调 dense/sparse 权重 -> 反馈 -> 下次从历史会话继续
+```
+
+连续场报告：
+
+```text
+query -> 相关笔记 -> field score -> Markdown / JSON 输出
+```
+
+每日 LIF 注意力管理：
+
+```text
+最近笔记 -> state voltage -> top spike -> closure 反馈
+```
+
+图谱结构分析：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\obsidian_graph_miner.py" --vault "." --output "Obsidian-LIF 知识图谱报告.md"
+python obsidian_graph_miner.py --vault "C:\path\to\vault" --output "Obsidian-LIF 知识图谱报告.md"
 ```
 
-Optional JSON graph summary:
+领域洞察：
 
 ```powershell
-python "04 项目库\P2_LIF-Memory\obsidian_graph_miner.py" --vault "." --output "Obsidian-LIF 知识图谱报告.md" --json-output "obsidian_lif_graph.json"
+python insight_integrator.py --vault "C:\path\to\vault" --profile economics --days 90 --output "经济学 LIF 洞察.md"
 ```
 
-The report shows:
+## 隐私边界
+
+不要提交这些文件：
 
 ```text
-folder distribution
-inbound/outbound link hubs
-bridge notes
-unresolved links
-top evidence notes for each LIF state
-how graph evidence should feed future LIF voltage
+config/*.local.json
+lif_field_state.json
+lif_field_params.json
+lif_sessions.json
+lif_conclusions.json
+lif_domain_state.json
+lif_embedding_cache.json
+lif_state.json
+lif_memory_feedback.json
 ```
 
-## Domain Insight Profiles
+它们可能包含私人笔记派生信息、本地模型路径、会话历史、反馈历史或 API 配置。
 
-`insight_integrator.py` can also run domain-specific thought profiles. This uses the same LIF idea, but changes the meaning of voltage:
+## 当前不是哪些东西
+
+LIF-Memory 目前还不是：
+
+- 生产级向量数据库服务；
+- 完整训练好的神经记忆模型；
+- 端到端可微分强化学习系统；
+- Obsidian 原始笔记的替代品；
+- 保证客观正确的自动决策系统。
+
+它目前是一个本地、可审计的记忆场原型：用 LIF 状态负责触发，用 embedding 提高召回，用图扩散恢复联系，用 LLM 改善解释，用人工反馈更新控制器。
+
+## 设计方向
+
+长期方向是：
 
 ```text
-action profile: V = unresolved action pressure
-insight profile: V = unresolved explanatory tension
+零散笔记
+-> 连续语义场
+-> 概念 / 关系 / 调节神经元
+-> 反馈塑形的 controller learning
+-> 更高质量的洞察 spike 和行动 spike
 ```
 
-Run the economics profile:
-
-```powershell
-python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --days 90 --output "经济学 LIF 洞察.md" --json-output "economics_insights.json"
-```
-
-For sparse domains you have not focused on, use exploratory sensitivity:
-
-```powershell
-python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --sensitivity exploratory --days 90 --output "经济学 LIF 洞察.md" --json-output "economics_insights.json"
-```
-
-Economics latent questions:
+核心边界是：
 
 ```text
-Macro_Cycle
-Inflation_Rate
-Incentive_System
-Debt_Finance
-Market_Psychology
+LIF 负责触发。
+Embedding 负责语义召回。
+图扩散负责恢复联系。
+LLM 负责解释和辩论。
+用户反馈负责调节控制器。
+原始笔记永远是 source of truth。
 ```
-
-Run only one economic question:
-
-```powershell
-python "04 项目库\P2_LIF-Memory\insight_integrator.py" --vault "." --profile economics --questions Debt_Finance --days 90 --dry-run
-```
-
-The output is not a task reminder. It is a thought card trigger: fragments accumulate until they justify writing a claim, contrast, mechanism table, or evidence card.
-
-## States
-
-The default version tracks five state neurons:
-
-```text
-Experiment
-Thesis
-Career
-AI_Memory
-Health
-```
-
-Each state has:
-
-```text
-V: current voltage
-theta: spike threshold
-decay: leakage coefficient per day
-reset_ratio: post-spike reset level
-cooldown_days: minimum spacing between spikes
-evidence_cap: maximum daily evidence input
-keywords: evidence detector
-suggestion: action emitted after spike
-```
-
-## What Is Voltage?
-
-In this project, `V` is not a token count, an embedding dimension, or a compressed copy of the original note.
-
-`V` means:
-
-```text
-accumulated actionable pressure / attention debt for one state
-```
-
-The original note preserves full information. Voltage only preserves a trend:
-
-```text
-repeated evidence -> charge up
-time gap -> leak down
-completion signal -> inhibit
-threshold crossing -> emit spike
-```
-
-The current update rule is:
-
-```text
-V = weighted_sum(V_fast, V_slow)
-```
-
-Where:
-
-```text
-evidence_input          score from matched note fragments for this state
-fast_decay^delta_days   leakage for acute pressure
-slow_decay^delta_days   leakage for background pressure
-completion_inhibition  suppression from completion words such as done/saved/submitted
-theta                   spike threshold
-```
-
-Since v0.3.0, `evidence_input` is the sum of evidence-vector scores rather than raw keyword hits. Since v0.6.0, each spike packet reports both `V_fast` and `V_slow`.
-
-Each spike packet includes a `voltage_model` block so the trigger can be audited.
-
-## Run
-
-From your Obsidian vault root:
-
-```powershell
-python "04 项目库\P2_LIF-Memory\lif_memory.py" --days 7 --output "LIF-Memory 回放结果.md"
-```
-
-If the script is outside the vault, pass the vault path explicitly:
-
-```powershell
-python lif_memory.py --vault "C:\path\to\vault" --days 7 --output "LIF-Memory 回放结果.md"
-```
-
-Preview without writing files:
-
-```powershell
-python lif_memory.py --vault "C:\path\to\vault" --days 7 --dry-run
-```
-
-Only replay specific states:
-
-```powershell
-python lif_memory.py --vault "C:\path\to\vault" --states Experiment,Thesis --days 14
-```
-
-Export JSON spike packets for Codex/agent workflows:
-
-```powershell
-python lif_memory.py --vault "C:\path\to\vault" --days 7 --json-output "lif_spikes.json"
-```
-
-Apply manual feedback:
-
-```powershell
-python lif_memory.py --vault "C:\path\to\vault" --days 14 --feedback-file "lif_feedback.json"
-```
-
-## Control Spike Count
-
-Limit the maximum number of emitted spike packets per day:
-
-```powershell
-python lif_memory.py --days 7 --daily-spike-budget 1 --output "LIF-Memory 回放结果.md"
-```
-
-The default is:
-
-```text
---daily-spike-budget 2
-```
-
-## Output
-
-The output is a Markdown replay report containing:
-
-```text
-summary table
-trigger cards
-JSON spike event packets
-state trajectory table
-tuning rules
-manual evaluation section
-```
-
-A spike event packet looks like this:
-
-```json
-{
-  "spike_type": "Experiment",
-  "topic": "负阻",
-  "time": "2026-06-12",
-  "V": 7.95,
-  "threshold": 7.5,
-  "priority": "P1",
-  "blocker_type": "repeated_failure",
-  "action_policy": "isolate",
-  "evidence_notes": [
-    {
-      "note": "2026-06-12",
-      "path": "06 日志复盘/2026/2026-06-12.md",
-      "snippet": "Fourth chapter lacks experiment data",
-      "score": 2.65,
-      "matched_keywords": ["第四章", "数据"],
-      "modifiers": ["action", "blocker", "time_pressure"]
-    }
-  ],
-  "trigger_reason": "Experiment evidence has accumulated and is actionable.",
-  "suggested_action": "Run one focused isolation test and decide whether this topic remains on the main path.",
-  "completion_target": "形成一页负阻隔离结论：可用/不可用/暂不作为主线。"
-}
-```
-
-## Tuning
-
-Use the manual evaluation section after each run:
-
-```text
-合理 / 太早 / 太晚 / 无用 / 应该触发但没触发
-```
-
-Then tune:
-
-- Too many false spikes: raise `theta`, narrow keywords, or reduce `evidence_cap`.
-- Too late: lower `theta` or add stronger keywords.
-- Repeated daily reminders: increase `cooldown_days`.
-- Still triggers after completion: add better `COMPLETION_WORDS` or check `INCOMPLETE_WORDS`.
-
-## Boundary
-
-Signal systems may optimize:
-
-```text
-spike -> waveform reconstruction
-```
-
-LIF-Memory optimizes:
-
-```text
-spike -> evidence recall -> action trigger
-```
-
-Original notes preserve information. State voltage preserves trend. Spikes trigger action.
