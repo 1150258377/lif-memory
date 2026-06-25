@@ -33,7 +33,7 @@ FIELD_TOPICS: dict[str, list[str]] = {
     "论文闭环": ["论文", "第三章", "第四章", "盲审", "答辩", "主线", "证据", "图", "创新点"],
     "负阻": ["负阻", "NDR", "negative resistance", "斜率", "偏置", "增益", "抵消"],
     "求职": ["简历", "实习", "工作", "求职", "岗位", "投递", "面试", "大模型"],
-    "健康恢复": ["焦虑", "累", "睡", "身体", "情绪", "压力", "害怕", "难受", "恢复"],
+    "健康恢复": ["健康", "焦虑", "累", "睡眠", "睡", "身体", "情绪", "压力", "害怕", "难受", "恢复", "心理", "疲惫", "精力", "运动", "休息", "状态", "崩", "撑", "饮食", "吃"],
 }
 
 IGNORED_PARTS = {".git", ".obsidian", ".trash", "__pycache__", ".venv", "node_modules", "examples", "tests"}
@@ -142,6 +142,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--graph-steps", type=int, default=2, help="Number of Obsidian graph diffusion steps.")
     parser.add_argument("--graph-alpha", type=float, default=0.35, help="Graph diffusion neighbor mixing ratio.")
     parser.add_argument("--threshold", type=float, default=5.0, help="LIF threshold for insight spike.")
+    parser.add_argument("--all-notes", action="store_true", help="Scan all .md files in vault, ignoring date filter.")
     parser.add_argument("--version", action="version", version=f"continuous-problem-field {VERSION}")
     return parser.parse_args()
 
@@ -274,7 +275,7 @@ def snippet_from_text(text: str, limit: int = 140) -> str:
     return snippet
 
 
-def read_notes(vault: Path, cutoff: date, days: int, max_notes: int) -> list[NoteObservation]:
+def read_notes(vault: Path, cutoff: date, days: int, max_notes: int, all_notes: bool = False) -> list[NoteObservation]:
     start = cutoff - timedelta(days=max(days, 1))
     notes: list[NoteObservation] = []
     for path in vault.rglob("*.md"):
@@ -284,7 +285,7 @@ def read_notes(vault: Path, cutoff: date, days: int, max_notes: int) -> list[Not
             day = note_day(path)
         except OSError:
             continue
-        if day < start or day > cutoff:
+        if not all_notes and (day < start or day > cutoff):
             continue
         raw = path.read_text(encoding="utf-8", errors="ignore")
         text = normalize_text(raw)
@@ -377,7 +378,9 @@ def infer_topic(query: str) -> str:
     return "自定义问题场"
 
 
-def time_kernel(note_day_value: date, today: date, sigma_days: float) -> float:
+def time_kernel(note_day_value: date, today: date, sigma_days: float, all_notes: bool = False) -> float:
+    if all_notes:
+        return 1.0
     delta = max((today - note_day_value).days, 0)
     sigma_days = max(sigma_days, 1.0)
     return math.exp(-((delta * delta) / (2.0 * sigma_days * sigma_days)))
@@ -419,6 +422,7 @@ def reconstruct_field(
     top_k: int,
     time_sigma: float,
     semantic_sigma: float,
+    all_notes: bool = False,
 ) -> tuple[list[FieldHit], float, dict[date, float], dict[date, float]]:
     query_vec = vectorize(query, title=query)
     hits: list[FieldHit] = []
@@ -431,10 +435,11 @@ def reconstruct_field(
         if sem <= 0:
             continue
         sem_w = semantic_kernel(sem, semantic_sigma)
-        time_w = time_kernel(note.day, today, time_sigma)
+        time_w = time_kernel(note.day, today, time_sigma, all_notes=all_notes)
         graph_bonus = 1.0 + 0.25 * note.centrality
         score = sem * sem_w * time_w * graph_bonus
-        if score <= 0.001:
+        min_score = 0.0001 if all_notes else 0.001
+        if score <= min_score:
             continue
         hit = FieldHit(
             note=note,
@@ -618,25 +623,48 @@ def render_markdown(result: FieldResult, threshold: float, time_sigma: float, se
     return "\n".join(lines)
 
 
+def load_field_params(vault: Path) -> dict:
+    """优先读取 lif_field_params.json 中由调参器写入的参数"""
+    p = vault / "lif_field_params.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
 def run(args: argparse.Namespace) -> FieldResult:
     vault = args.vault.resolve()
     today = parse_today(args.today)
-    notes = read_notes(vault, today, args.days, args.max_notes)
-    diffuse_graph(notes, args.graph_steps, args.graph_alpha)
+    # 读取调参器写入的参数，命令行参数优先级更高
+    saved = load_field_params(vault)
+    all_notes_flag = getattr(args, "all_notes", False)
+    threshold = args.threshold if args.threshold != 5.0 else float(saved.get("threshold", args.threshold))
+    semantic_sigma = args.semantic_sigma if args.semantic_sigma != 0.55 else float(saved.get("semantic_sigma", args.semantic_sigma))
+    time_sigma = args.time_sigma if args.time_sigma != 30.0 else float(saved.get("time_sigma", args.time_sigma))
+    graph_alpha = args.graph_alpha if args.graph_alpha != 0.35 else float(saved.get("graph_alpha", args.graph_alpha))
+    graph_steps = args.graph_steps if args.graph_steps != 2 else int(saved.get("graph_steps", args.graph_steps))
+    notes = read_notes(vault, today, args.days, args.max_notes, all_notes=all_notes_flag)
+    diffuse_graph(notes, graph_steps, graph_alpha)
     hits, field_energy, daily_current, daily_completion = reconstruct_field(
         notes=notes,
         query=args.query,
         today=today,
         top_k=max(1, args.top_k),
-        time_sigma=args.time_sigma,
-        semantic_sigma=args.semantic_sigma,
+        time_sigma=time_sigma,
+        semantic_sigma=semantic_sigma,
+        all_notes=all_notes_flag,
     )
-    start = today - timedelta(days=max(args.days, 1))
-    trajectory = lif_iterate(daily_current, daily_completion, start, today, threshold=args.threshold)
+    if all_notes_flag and daily_current:
+        start = min(daily_current.keys())
+    else:
+        start = today - timedelta(days=max(args.days, 1))
+    trajectory = lif_iterate(daily_current, daily_completion, start, today, threshold=threshold)
     spike = any(step.spiked for step in trajectory[-7:]) if trajectory else False
     reconstruction_pressure = trajectory[-1].v if trajectory else 0.0
     topic = infer_topic(args.query)
-    insight_card = make_insight_card(args.query, topic, hits, trajectory, threshold=args.threshold)
+    insight_card = make_insight_card(args.query, topic, hits, trajectory, threshold=threshold)
     return FieldResult(
         query=args.query,
         topic=topic,
