@@ -71,6 +71,96 @@ PROVIDER_PRESETS = {
     "zhipu":    {"base_url": "https://open.bigmodel.cn/api/paas/v4",              "model": "glm-4-flash",   "env": "ZHIPUAI_API_KEY"},
 }
 
+
+def llm_local_config_path() -> Path:
+    return Path(__file__).resolve().parent / "config" / "llm.local.json"
+
+
+def _read_llm_local_config() -> dict:
+    path = llm_local_config_path()
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def build_llm_config(
+    provider: str = "deepseek",
+    *,
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    prefer_local_provider: bool = True,
+) -> dict:
+    local_cfg = _read_llm_local_config()
+    local_provider = str(local_cfg.get("provider") or "").strip()
+    if prefer_local_provider and local_provider:
+        provider = local_provider
+    if provider not in PROVIDER_PRESETS:
+        provider = "deepseek"
+
+    preset = PROVIDER_PRESETS[provider]
+    api_keys = local_cfg.get("api_keys", {})
+    if not isinstance(api_keys, dict):
+        api_keys = {}
+
+    resolved_key = (
+        api_key
+        if api_key is not None
+        else os.environ.get(preset["env"], "")
+        or str(api_keys.get(provider) or local_cfg.get("api_key") or "")
+    )
+
+    return {
+        "provider": provider,
+        "base_url": (base_url or str(local_cfg.get("base_url") or preset["base_url"])).strip(),
+        "model": (model or str(local_cfg.get("model") or preset["model"])).strip(),
+        "api_key": str(resolved_key or "").strip(),
+    }
+
+
+def save_llm_local_config(provider: str, base_url: str, model: str, api_key: str = "") -> dict:
+    if provider not in PROVIDER_PRESETS:
+        raise ValueError("unsupported provider")
+    base_url = base_url.strip() or PROVIDER_PRESETS[provider]["base_url"]
+    model = model.strip() or PROVIDER_PRESETS[provider]["model"]
+
+    path = llm_local_config_path()
+    local_cfg = _read_llm_local_config()
+    api_keys = local_cfg.get("api_keys", {})
+    if not isinstance(api_keys, dict):
+        api_keys = {}
+    if api_key.strip():
+        api_keys[provider] = api_key.strip()
+
+    local_cfg.update({
+        "provider": provider,
+        "base_url": base_url,
+        "model": model,
+        "api_keys": api_keys,
+    })
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(local_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    return build_llm_config(provider, model=model, base_url=base_url, prefer_local_provider=False)
+
+
+def public_llm_config() -> dict:
+    cfg = STATE.llm_cfg if STATE else build_llm_config()
+    return {
+        "provider": cfg.get("provider", "deepseek"),
+        "base_url": cfg.get("base_url", ""),
+        "model": cfg.get("model", ""),
+        "has_key": bool(cfg.get("api_key")),
+        "config_path": str(llm_local_config_path()),
+        "providers": {
+            name: {"base_url": p["base_url"], "model": p["model"], "env": p["env"]}
+            for name, p in PROVIDER_PRESETS.items()
+        },
+    }
+
 # ── 场状态 ────────────────────────────────────────────────────────────────────
 
 class FieldState:
@@ -1154,6 +1244,17 @@ header h1{font-size:17px;font-weight:600;background:linear-gradient(90deg,var(--
 .tw-bar{flex:1;height:3px;background:rgba(148,163,184,.1);border-radius:2px;overflow:hidden}
 .tw-bf{height:100%;background:var(--accent3);border-radius:2px;transition:width .5s}
 .tw-v{color:var(--accent3);font-weight:600;font-variant-numeric:tabular-nums;min-width:32px;text-align:right}
+.llm-card{display:flex;flex-direction:column;gap:8px}
+.form-field{display:flex;flex-direction:column;gap:4px}
+.form-field label{font-size:10.5px;color:var(--muted)}
+.form-field input,.form-field select{width:100%;height:34px;border-radius:8px;border:1px solid var(--border);background:rgba(15,23,42,.88);color:var(--text);outline:none;padding:0 10px;font-size:12.5px}
+.form-field input:focus,.form-field select:focus{border-color:var(--accent)}
+.form-field input[type=password]{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.llm-actions{display:flex;gap:7px}
+.llm-actions .btn{flex:1}
+.llm-status{font-size:11px;color:var(--muted);line-height:1.55;border-top:1px solid rgba(148,163,184,.12);padding-top:8px;word-break:break-word}
+.llm-status.ok{color:var(--accent3)}
+.llm-status.bad{color:#f87171}
 /* 电位状态 */
 .vstate{background:var(--panel2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px}
 .vrow{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
@@ -1294,6 +1395,30 @@ header h1{font-size:17px;font-weight:600;background:linear-gradient(90deg,var(--
   </div>
   <!-- 右：参数+电位 -->
   <div class="side">
+    <div class="stitle">大模型 API</div>
+    <div class="vstate llm-card">
+      <div class="form-field">
+        <label for="llmProvider">Provider</label>
+        <select id="llmProvider" onchange="applyProviderPreset()"></select>
+      </div>
+      <div class="form-field">
+        <label for="llmModel">模型</label>
+        <input id="llmModel" placeholder="例如 deepseek-chat"/>
+      </div>
+      <div class="form-field">
+        <label for="llmBaseUrl">Base URL</label>
+        <input id="llmBaseUrl" placeholder="https://api.deepseek.com"/>
+      </div>
+      <div class="form-field">
+        <label for="llmApiKey">API Key</label>
+        <input id="llmApiKey" type="password" placeholder="粘贴 API Key；留空则不修改已保存 key"/>
+      </div>
+      <div class="llm-actions">
+        <button class="btn btn-p" onclick="saveLlmConfig()">保存配置</button>
+        <button class="btn btn-s" onclick="testLlmConfig()">测试连接</button>
+      </div>
+      <div class="llm-status" id="llmStatus">加载配置中…</div>
+    </div>
     <div class="stitle">场电位</div>
     <div class="vstate" id="voltageState">
       <div class="vrow"><span class="vlabel">快轨 V_fast</span><span class="vnum" id="vf">—</span></div>
@@ -1358,6 +1483,86 @@ const PM = {
   sparse_weight:  {desc:"稀疏解释权重", min:0, max:1, unit:""},
 };
 let params={}, lastQuery="", allSessions=[], activeSessionId="", sessionsBootstrapped=false;
+let llmProviders={}, currentConclusionSort='ts';
+
+async function loadLlmConfig(){
+  const status=document.getElementById('llmStatus');
+  try{
+    const r=await fetch('/api/llm-config');
+    const d=await r.json();
+    llmProviders=d.providers||{};
+    const providerEl=document.getElementById('llmProvider');
+    providerEl.innerHTML='';
+    for(const name of Object.keys(llmProviders)){
+      const opt=document.createElement('option');
+      opt.value=name; opt.textContent=name;
+      providerEl.appendChild(opt);
+    }
+    providerEl.value=d.provider||'deepseek';
+    document.getElementById('llmModel').value=d.model||'';
+    document.getElementById('llmBaseUrl').value=d.base_url||'';
+    const keyEl=document.getElementById('llmApiKey');
+    keyEl.value='';
+    keyEl.placeholder=d.has_key?'已配置，留空表示不修改':'粘贴 API Key';
+    status.className='llm-status '+(d.has_key?'ok':'bad');
+    status.textContent=d.has_key
+      ? `已配置 ${d.provider} / ${d.model}。配置保存在本机，不会上传。`
+      : `未配置 API Key。请选择 provider，填入 API Key 后保存。`;
+  }catch(e){
+    status.className='llm-status bad';
+    status.textContent='读取配置失败：'+e;
+  }
+}
+
+function applyProviderPreset(){
+  const p=document.getElementById('llmProvider').value;
+  const preset=llmProviders[p]||{};
+  document.getElementById('llmModel').value=preset.model||'';
+  document.getElementById('llmBaseUrl').value=preset.base_url||'';
+  const status=document.getElementById('llmStatus');
+  status.className='llm-status';
+  status.textContent='已切换 provider。填入 API Key 后保存；留空则沿用该 provider 已保存的 key。';
+}
+
+async function saveLlmConfig(){
+  const status=document.getElementById('llmStatus');
+  status.className='llm-status';
+  status.textContent='保存中…';
+  const payload={
+    provider:document.getElementById('llmProvider').value,
+    model:document.getElementById('llmModel').value.trim(),
+    base_url:document.getElementById('llmBaseUrl').value.trim(),
+    api_key:document.getElementById('llmApiKey').value.trim(),
+  };
+  try{
+    const r=await fetch('/api/llm-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'保存失败');
+    document.getElementById('llmApiKey').value='';
+    await loadLlmConfig();
+    const cfg=d.config||{};
+    status.className='llm-status ok';
+    status.textContent=`已保存：${cfg.provider||payload.provider} / ${cfg.model||payload.model}`;
+  }catch(e){
+    status.className='llm-status bad';
+    status.textContent='保存失败：'+e.message;
+  }
+}
+
+async function testLlmConfig(){
+  const status=document.getElementById('llmStatus');
+  status.className='llm-status';
+  status.textContent='测试连接中…';
+  try{
+    const r=await fetch('/api/llm-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const d=await r.json();
+    status.className='llm-status '+(d.ok?'ok':'bad');
+    status.textContent=d.ok?'连接成功：'+d.reply:'连接失败：'+d.reply;
+  }catch(e){
+    status.className='llm-status bad';
+    status.textContent='测试失败：'+e;
+  }
+}
 
 async function fetchStatus(){
   const r=await fetch('/api/status');
@@ -1755,6 +1960,7 @@ function restoreMessages(messages){
   }
 }
 
+loadLlmConfig();
 fetchStatus();
 loadSessions(true);
 loadConclusions('ts');
@@ -1763,8 +1969,6 @@ setInterval(loadSessions,15000);
 setInterval(()=>loadConclusions(currentConclusionSort),30000);
 
 // ── 结论库 ────────────────────────────────────────────────────────────────
-let currentConclusionSort='ts';
-
 async function loadConclusions(sort='ts'){
   currentConclusionSort=sort;
   // 更新排序按钮样式
@@ -1935,6 +2139,8 @@ class Handler(BaseHTTPRequestHandler):
                 "voltage":    voltage,
                 "field_state": domain_summary(STATE.vault),
             })
+        elif p == "/api/llm-config":
+            self.send_json(public_llm_config())
         elif p == "/api/field-state":
             self.send_json(domain_summary(STATE.vault))
         elif p == "/api/log_path":
@@ -2096,6 +2302,34 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"reply": f"[错误: {e}]", "changes": []})
             finally:
                 STATE.status = "idle"
+
+        elif p == "/api/llm-config":
+            try:
+                provider = str(body.get("provider") or STATE.llm_cfg.get("provider") or "deepseek").strip()
+                base_url = str(body.get("base_url") or "").strip()
+                model    = str(body.get("model") or "").strip()
+                api_key  = str(body.get("api_key") or "").strip()
+                cfg = save_llm_local_config(provider, base_url, model, api_key)
+                with STATE.lock:
+                    STATE.llm_cfg = cfg
+                self.send_json({
+                    "ok": True,
+                    "message": "已保存到本地配置，并已更新当前服务。",
+                    "config": public_llm_config(),
+                })
+            except Exception as e:
+                self.send_json({"ok": False, "error": str(e)}, 400)
+
+        elif p == "/api/llm-test":
+            try:
+                reply = call_llm([
+                    {"role": "system", "content": "你是连接测试助手。"},
+                    {"role": "user", "content": "请只回复 OK。"},
+                ])
+                ok = not reply.startswith("[LLM") and "失败" not in reply
+                self.send_json({"ok": ok, "reply": reply})
+            except Exception as e:
+                self.send_json({"ok": False, "reply": f"[测试失败: {e}]"})
 
         elif p == "/api/export":
             md = generate_export_md()
@@ -2272,21 +2506,12 @@ def main():
     global STATE
     args   = parse_args()
     vault  = args.vault.resolve()
-    preset = PROVIDER_PRESETS[args.llm_provider]
-
-    # 读取顺序：命令行参数 > 环境变量 > config/llm.local.json
-    api_key = args.llm_api_key or os.environ.get(preset["env"], "")
-    if not api_key:
-        local_cfg_path = Path(__file__).resolve().parent / "config" / "llm.local.json"
-        if local_cfg_path.exists():
-            try:
-                local_cfg = json.loads(local_cfg_path.read_text(encoding="utf-8"))
-                api_keys = local_cfg.get("api_keys", {})
-                api_key = api_keys.get(args.llm_provider, "") or str(local_cfg.get("api_key", ""))
-            except Exception:
-                pass
-
-    llm_cfg = {"base_url": preset["base_url"], "model": args.llm_model or preset["model"], "api_key": api_key}
+    llm_cfg = build_llm_config(
+        args.llm_provider,
+        api_key=args.llm_api_key,
+        model=args.llm_model,
+        prefer_local_provider=not (args.llm_api_key or args.llm_model),
+    )
 
     params_path       = vault / "lif_field_params.json"
     state_path        = vault / "lif_field_state.json"
@@ -2308,8 +2533,8 @@ def main():
     url = f"http://127.0.0.1:{args.port}"
     print(f"\n⚡ LIF-Memory 持续进化服务")
     print(f"   知识库：{vault}")
-    print(f"   LLM：{args.llm_provider} / {llm_cfg['model']}")
-    print(f"   API Key：{'已配置 ✓' if api_key else '❌ 未配置'}")
+    print(f"   LLM：{llm_cfg['provider']} / {llm_cfg['model']}")
+    print(f"   API Key：{'已配置 ✓' if llm_cfg.get('api_key') else '❌ 未配置，可在网页右侧填写'}")
     print(f"   进化日志：{log_path}")
     print(f"\n   👉 {url}\n")
 

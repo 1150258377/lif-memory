@@ -61,6 +61,7 @@ python lif_web_tuner.py --vault "." --llm-provider deepseek
 
 `lif_web_tuner.py` 目前包含这些实际功能：
 
+- 大模型 API 配置：在网页右侧填写 provider、model、base URL、API key，保存到本地 `config/llm.local.json`，并可直接测试连接。
 - 扫描 vault：读取全库 Markdown，建立字段缓存。
 - 提问：把用户问题投影到连续问题场中，返回证据和回答。
 - 历史会话：把网页对话保存到 `lif_sessions.json`，可恢复旧会话。
@@ -286,7 +287,7 @@ python lif_web_tuner.py --vault "C:\path\to\vault" --llm-provider deepseek
 config/llm.local.json
 ```
 
-该文件被 `.gitignore` 排除。
+更方便的方式是在网页右侧“大模型 API”卡片中填写并保存。该文件被 `.gitignore` 排除。
 
 ## 文件结构
 
