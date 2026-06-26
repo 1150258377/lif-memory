@@ -141,16 +141,17 @@ def run_pipeline(params: WebPipelineParams) -> tuple[str, str, str, str, str]:
     spike = any(step.spiked for step in trajectory[-7:]) if trajectory else False
     latest_v = trajectory[-1].v if trajectory else 0.0
     reconstruction_pressure = latest_v / float(params.threshold) if float(params.threshold) > 0 else 0.0
+    topic = cpf.infer_topic(query)
     field_result = cpf.FieldResult(
         query=query,
-        topic=cpf.infer_topic(query),
+        topic=topic,
         today=today,
         field_energy=field_energy + recall.current_boost,
         reconstruction_pressure=reconstruction_pressure,
         hits=hits,
         trajectory=trajectory,
         spike=spike,
-        insight_card=cpf.make_insight_card(query, cpf.infer_topic(query), hits, trajectory, float(params.threshold)),
+        insight_card=cpf.make_insight_card(query, topic, hits, trajectory, float(params.threshold)),
     )
 
     recall_hits = hippocampal_field_hits(recall)
@@ -242,21 +243,6 @@ def run_web_pipeline(
     threshold: float,
     slots: int,
 ) -> tuple[str, str, str, str, str]:
-    try:
-        return run_pipeline(
-            WebPipelineParams(
-                vault=vault,
-                query=query,
-                days=int(days),
-                today=today,
-                enable_hippampus=enable_hippocampus,  # type: ignore[call-arg]
-            )
-        )
-    except TypeError:
-        # Keep Gradio callback compatibility if a stale browser sends the old
-        # field name. The actual path below uses the correct dataclass field.
-        pass
-
     try:
         params = WebPipelineParams(
             vault=vault,
