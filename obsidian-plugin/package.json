@@ -1,0 +1,30 @@
+{
+  "name": "obsidian-lifme",
+  "version": "0.1.0",
+  "description": "Event-driven memory and insight engine for Obsidian vaults.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "lif",
+    "memory",
+    "knowledge-graph",
+    "spike"
+  ],
+  "author": "pengqiang jing",
+  "license": "MIT",
+  "dependencies": {
+    "tslib": "^2.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.20.2",
+    "obsidian": "^1.5.12",
+    "typescript": "^5.4.3"
+  }
+}
