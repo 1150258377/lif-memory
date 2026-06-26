@@ -68,6 +68,59 @@ CA3 递归补全
 返回 recalled_terms + evidence
 ```
 
+## 网页端串联
+
+`hippocampal_bridge.py` 把海马体输出压缩成统一的 `HippocampalRecall`：
+
+```text
+trace_id
+similarity
+completed
+completion_gain
+recalled_terms
+recalled_evidence
+current_boost
+```
+
+网页端 `lif_web_tuner.py` 会把这个 recall 接入原来的连续问题场流程：
+
+```text
+Obsidian notes
+-> continuous_problem_field.reconstruct_field()
+-> hippocampal_bridge.build_recall_from_vault()
+-> inject_recall_current()
+-> continuous_problem_field.lif_iterate()
+-> AhaEngine.build_aha_cards()
+```
+
+这里的海马体不是直接回答问题，而是提供三类信号：
+
+1. **召回信号**：当前 query 唤起哪个 cortex trace。
+2. **补全信号**：CA3 是否从 partial cue 补出额外关联。
+3. **调制信号**：`current_boost` 加到当天 LIF current，让相关旧记忆能提高 spike 概率。
+
+运行网页端：
+
+```powershell
+python lif_web_tuner.py
+```
+
+打开：
+
+```text
+http://127.0.0.1:7860
+```
+
+网页端会显示五个输出页：
+
+| Tab | 内容 |
+|---|---|
+| Summary | 本次扫描数量、field energy、V/theta、海马体 boost |
+| Hippocampus | trace、similarity、completion_gain、召回证据 |
+| Field | 连续问题场报告，并附加 hippocampal evidence |
+| Aha | AhaEngine 输出 old_model / contradiction / new_model |
+| JSON | 完整串联 packet，便于继续调试 |
+
 ## 快速运行
 
 内置 demo：
@@ -91,6 +144,7 @@ python hippocampal_lif_memory.py `
 
 ```powershell
 python -m unittest tests/test_hippocampal_lif_memory.py
+python -m unittest tests/test_hippocampal_bridge.py
 ```
 
 ## 测试覆盖的海马体功能
@@ -109,6 +163,11 @@ python -m unittest tests/test_hippocampal_lif_memory.py
 4. **Cortex 长期记忆**  
    trace 保存 signature、top terms、evidence 和写入次数。
 
+`tests/test_hippocampal_bridge.py` 覆盖网页端接入前的关键接口：
+
+1. `HippocampalRecall` 是否暴露 current_boost、metrics 和 recall evidence。
+2. `inject_recall_current()` 是否能把海马体 current 注入当天 LIF 输入。
+
 ## 与旧 LIF-Memory 的区别
 
 旧结构更像：
@@ -120,9 +179,9 @@ python -m unittest tests/test_hippocampal_lif_memory.py
 新结构更像：
 
 ```text
-文本 -> DG 分离 -> CA3 自组织 -> CA1 判断 -> Cortex 痕迹
+文本 -> DG 分离 -> CA3 自组织 -> CA1 判断 -> Cortex 痕迹 -> recall current -> LIF spike -> AhaEngine
 ```
 
 关键变化是：
 
-> LIF 不再只是“是否写入”的门控器，而是 CA3 网络里的递归联想单元。
+> LIF 不再只是“是否写入”的门控器，而是 CA3 网络里的递归联想单元；网页端现在会把 CA3/CA1 的召回结果作为 downstream LIF 和 AhaEngine 的输入。
