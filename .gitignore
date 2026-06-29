@@ -11,6 +11,7 @@ LIF-Memory 回放结果.md
 LIF-Insight 回放结果.md
 LIF-Inspiration 灵感回放结果.md
 Predictive LIF-Memory Report.md
+Meta-Spike Memory Report.md
 *回放结果*.md
 lif_spikes.json
 lif_insights.json
@@ -19,6 +20,7 @@ lif_state.json
 lif_memory_feedback.json
 predictive_lif_state.json
 predictive_lif_report.json
+meta_spikes.json
 *.local.json
 
 # Local Obsidian/cache files if the project is copied into a vault.
