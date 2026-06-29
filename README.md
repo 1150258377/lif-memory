@@ -12,7 +12,9 @@ Obsidian 笔记
 -> Obsidian 图扩散
 -> 连续问题场
 -> LIF 电压 / spike
--> LLM 回答或多智能体辩论
+-> Predictive LIF-JEPA Field
+-> micro-spike / macro candidate
+-> LLM 回答、AhaEngine 或多智能体辩论
 -> 用户反馈
 -> 控制器参数更新
 ```
@@ -26,6 +28,7 @@ Obsidian 笔记
 | Obsidian 扫描 | 递归扫描 Markdown，保留来源路径、片段、关键词和证据分数，忽略 `.git`、`.obsidian`、缓存目录等。 |
 | LIF 记忆回放 | 跟踪主题电压、泄漏、阈值、冷却、优先级、完成抑制、spike 触发和人工关闭反馈。 |
 | 连续问题场 | 根据时间距离、稀疏语义、dense embedding、Obsidian 链接图和 LIF 压力重建一个 query-specific field。 |
+| Predictive LIF-JEPA Field | 在 LIF 亚阈值电位轨迹上增加 latent prediction、prediction error、micro-spike、homeostasis 和 macro candidate。 |
 | 网页调参器 | 提供浏览器界面，支持扫描笔记、提问、查看证据、历史会话、结论沉淀、参数调节、反馈学习。 |
 | 历史记录 | 网页端会把对话保存到 `lif_sessions.json`，可以继续之前的问题链，而不是每次从零开始。 |
 | 混合 embedding | 支持稀疏可解释向量 + dense embedding 混合评分，可接 OpenAI-compatible API 或本地 FlagEmbedding/BGE。 |
@@ -121,6 +124,78 @@ python continuous_problem_field.py `
 
 如果没有配置 embedding，系统会自动退回稀疏语义模式。
 
+## Predictive LIF-JEPA Field
+
+`predictive_lif_memory.py` 是新增的预测层。它不替代 `lif_memory.py`，而是在经典 LIF 回放得到的亚阈值电位轨迹上增加一条 JEPA-style 闭环：
+
+```text
+LIF latent state z_t
+-> predictor
+-> predicted z_(t+1)
+-> actual z_(t+1)
+-> prediction error
+-> energy injection
+-> micro-spike / macro candidate
+-> homeostasis
+```
+
+它解决的是事件系统的一个核心矛盾：
+
+```text
+阈值太高 -> 什么都不触发
+阈值太低 -> 每天都在乱触发
+```
+
+因此新增了三层状态：
+
+| 层级 | 作用 |
+| --- | --- |
+| subthreshold latent trace | 即使没有正式 spike，也保存 `V_fast / V_slow / V / input / completion` 的轨迹。 |
+| micro-spike | 内部激活，不默认打扰用户，用于记录某个主题正在变热。 |
+| macro candidate | 接近行动卡片或 AhaEngine 输入的候选激活。 |
+
+核心公式：
+
+```text
+r_i(t) = V_i(t) / theta_i
+r'_i(t) = r_i(t) + diffusion_alpha * sum_j A_ij r_j(t)
+r_hat_i(t) = decay * r'_i(t-1) + input_gain * input_i(t-1) - completion_gain * completion_i(t-1)
+error_i(t) = |r'_i(t) - r_hat_i(t)|
+effective_i(t) = r'_i(t) + prediction_error_weight * EMA(error_i)
+micro_spike_i(t) = effective_i(t) >= theta_micro_i
+theta_micro_i <- theta_micro_i + eta * (firing_rate_i - target_micro_rate)
+```
+
+命令行入口：
+
+```powershell
+python predictive_lif_memory.py `
+  --vault "C:\path\to\vault" `
+  --days 14 `
+  --output "Predictive LIF-Memory Report.md" `
+  --json-output predictive_lif_report.json
+```
+
+只预览、不写入：
+
+```powershell
+python predictive_lif_memory.py --vault "C:\path\to\vault" --days 14 --dry-run
+```
+
+默认写入本地 controller state：
+
+```text
+predictive_lif_state.json
+```
+
+这个文件包含 micro 阈值调节、prediction-error EMA 和 micro streak，属于私人派生状态，不应该提交到 GitHub。
+
+更完整说明见：
+
+```text
+docs/predictive_lif_jepa_field.md
+```
+
 ## 向量数据库路径 vs 联系场路径
 
 这个项目目前更接近“联系场”，不是传统向量数据库。
@@ -128,7 +203,7 @@ python continuous_problem_field.py `
 | 路径 | 核心机制 | 优势 | 局限 |
 | --- | --- | --- | --- |
 | 真实向量数据库 | 文本 chunk -> embedding -> ANN 检索 | 语义召回强，适合大规模相似搜索 | 解释性弱，通常只回答“像不像”，不负责长期电压和反馈状态 |
-| LIF 联系场 | 笔记 -> 稀疏语义 + dense 语义 + 图扩散 + LIF 电压 | 能解释来源，能保留长期问题压力，能结合反馈和神经元状态 | 不是高性能向量库，embedding 部分仍需要模型质量支撑 |
+| LIF 联系场 | 笔记 -> 稀疏语义 + dense 语义 + 图扩散 + LIF 电压 + predictive micro trace | 能解释来源，能保留长期问题压力，能结合预测误差、反馈和神经元状态 | 不是高性能向量库，embedding 部分仍需要模型质量支撑 |
 
 当前实现采用混合方式：
 
@@ -138,7 +213,7 @@ hybrid_similarity =
   + sparse_similarity * sparse_weight
 ```
 
-`dense_similarity` 负责语义召回，`sparse_similarity` 负责可解释性。LIF 电压和图扩散负责把“单次相似”提升为“长期问题场”。
+`dense_similarity` 负责语义召回，`sparse_similarity` 负责可解释性。LIF 电压、预测误差和图扩散负责把“单次相似”提升为“长期问题场”。
 
 ## 本地 FlagEmbedding / BGE 接入
 
@@ -212,6 +287,7 @@ integration        需要整合成洞察卡或稳定结论的压力
 - 把反馈转成 reward scalar。
 - 更新 `lif_domain_state.json` 中的反馈历史、概念状态、神经元状态。
 - 保守调整 dense/sparse 权重、阈值摩擦等场参数。
+- 在 `predictive_lif_state.json` 中保存 micro 阈值调节、prediction-error EMA 和 micro streak。
 
 尚未实现：
 
@@ -224,6 +300,7 @@ integration        需要整合成洞察卡或稳定结论的压力
 
 ```text
 用户反馈 -> reward -> 控制器参数更新 -> 下一次问题场重建
+LIF latent trace -> prediction error -> micro threshold homeostasis -> 下一次 predictive activation
 ```
 
 ## 经典 LIF 记忆回放
@@ -297,13 +374,15 @@ config/llm.local.json
 | `lif_field_learning.py` | embedding 配置/cache、本地 FlagEmbedding、领域状态、多 LIF 神经元、reward update。 |
 | `continuous_problem_field.py` | 连续问题场 CLI：稀疏/dense 语义、图扩散、LIF scoring。 |
 | `lif_memory.py` | 核心 LIF 回放引擎。 |
+| `predictive_lif_memory.py` | JEPA-style 预测层：读取 LIF 亚阈值轨迹，生成 prediction error、micro-spike、macro candidate 和 homeostasis。 |
 | `lif_memory_stateful.py` | 带持久 voltage/topic state 的回放入口。 |
 | `llm_adapter.py` | OpenAI-compatible LLM review adapter。 |
+| `aha_engine.py` | spike 后的 Aha 重构层：把事件门控变成旧模型、冲突、新模型、行动变化。 |
 | `obsidian_graph_miner.py` | Obsidian wikilink、folder、tag 图谱挖掘。 |
 | `insight_integrator.py` | 领域洞察 profile，例如 economics。 |
 | `knowledge_maze_explorer.py` | 知识迷宫式路径探索。 |
 | `memory_field.py` / `unsupervised_memory_field.py` | 实验性记忆场组件。 |
-| `docs/` | 架构、relation spike、连续问题场、后续路线文档。 |
+| `docs/` | 架构、relation spike、连续问题场、预测场、后续路线文档。 |
 
 ## 典型工作流
 
@@ -323,6 +402,12 @@ query -> 相关笔记 -> field score -> Markdown / JSON 输出
 
 ```text
 最近笔记 -> state voltage -> top spike -> closure 反馈
+```
+
+Predictive LIF-JEPA 预测层：
+
+```powershell
+python predictive_lif_memory.py --vault "C:\path\to\vault" --days 14 --output "Predictive LIF-Memory Report.md"
 ```
 
 图谱结构分析：
@@ -351,9 +436,12 @@ lif_domain_state.json
 lif_embedding_cache.json
 lif_state.json
 lif_memory_feedback.json
+predictive_lif_state.json
+predictive_lif_report.json
+Predictive LIF-Memory Report.md
 ```
 
-它们可能包含私人笔记派生信息、本地模型路径、会话历史、反馈历史或 API 配置。
+它们可能包含私人笔记派生信息、本地模型路径、会话历史、反馈历史、预测误差轨迹或 API 配置。
 
 ## 当前不是哪些东西
 
@@ -365,7 +453,7 @@ LIF-Memory 目前还不是：
 - Obsidian 原始笔记的替代品；
 - 保证客观正确的自动决策系统。
 
-它目前是一个本地、可审计的记忆场原型：用 LIF 状态负责触发，用 embedding 提高召回，用图扩散恢复联系，用 LLM 改善解释，用人工反馈更新控制器。
+它目前是一个本地、可审计的记忆场原型：用 LIF 状态负责触发，用 embedding 提高召回，用图扩散恢复联系，用 predictive error 保存亚阈值变化，用 LLM 改善解释，用人工反馈更新控制器。
 
 ## 设计方向
 
@@ -374,7 +462,10 @@ LIF-Memory 目前还不是：
 ```text
 零散笔记
 -> 连续语义场
--> 概念 / 关系 / 调节神经元
+-> LIF latent state
+-> Predictive LIF-JEPA Field
+-> micro-spike / macro candidate
+-> AhaEngine / 行动卡片
 -> 反馈塑形的 controller learning
 -> 更高质量的洞察 spike 和行动 spike
 ```
@@ -385,6 +476,8 @@ LIF-Memory 目前还不是：
 LIF 负责触发。
 Embedding 负责语义召回。
 图扩散负责恢复联系。
+Predictive error 负责暴露 latent trajectory 的偏差。
+Homeostasis 负责防止长期沉默或过度触发。
 LLM 负责解释和辩论。
 用户反馈负责调节控制器。
 原始笔记永远是 source of truth。
